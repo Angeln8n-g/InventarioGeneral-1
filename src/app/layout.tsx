@@ -30,10 +30,10 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
-        <meta name="application-name" content="CCC inventario" />
+        <meta name="application-name" content="Inventario SGI" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="CCC inventario" />
+        <meta name="apple-mobile-web-app-title" content="Inventario SGI" />
         <meta name="description" content="Sistema de gestión de inventario general" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
@@ -53,15 +53,15 @@ export default function RootLayout({
         <link rel="shortcut icon" href="/favicon.ico" />
 
         <meta name="twitter:card" content="summary" />
-        <meta name="twitter:url" content="https://inventory.claro.com" />
-        <meta name="twitter:title" content="CCC inventario" />
+        <meta name="twitter:url" content="https://inventario.hunykho.com" />
+        <meta name="twitter:title" content="Inventario SGI" />
         <meta name="twitter:description" content="Sistema de gestión de inventario general" />
         <meta name="twitter:image" content="https://inventory.claro.com/icons/icon-192x192.png" />
         <meta name="twitter:creator" content="@claro" />
         <meta property="og:type" content="website" />
-        <meta property="og:title" content="CCC inventario" />
+        <meta property="og:title" content="Inventario SGI" />
         <meta property="og:description" content="Sistema de gestión de inventario general" />
-        <meta property="og:site_name" content="Claro Inventory" />
+        <meta property="og:site_name" content="Inventario SGI" />
         <meta property="og:url" content="https://inventory.claro.com" />
         <meta property="og:image" content="https://inventory.claro.com/icons/icon-192x192.png" />
 
