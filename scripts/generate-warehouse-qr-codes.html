@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Códigos QR del Almacén - Imprimir</title>
+    <style>
+      @media print {
+        .no-print {
+          display: none;
+        }
+        .qr-card {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding: 20px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .header h1 {
+        margin: 0 0 10px 0;
+        color: #333;
+      }
+
+      .header p {
+        margin: 0;
+        color: #666;
+      }
+
+      .controls {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .btn {
+        background: #dc2626;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        font-size: 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin: 0 10px;
+      }
+
+      .btn:hover {
+        background: #b91c1c;
+      }
+
+      .qr-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .qr-card {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        border: 2px solid #e5e7eb;
+      }
+
+      .qr-card.zone-general {
+        border-color: #3b82f6;
+      }
+
+      .qr-card.zone-tools {
+        border-color: #f59e0b;
+      }
+
+      .qr-card.zone-consumables {
+        border-color: #10b981;
+      }
+
+      .qr-card.zone-electronics {
+        border-color: #8b5cf6;
+      }
+
+      .qr-code {
+        margin: 20px auto;
+        padding: 10px;
+        background: white;
+        border-radius: 8px;
+      }
+
+      .qr-title {
+        font-size: 24px;
+        font-weight: bold;
+        margin: 0 0 10px 0;
+        color: #111;
+      }
+
+      .qr-location {
+        font-size: 16px;
+        color: #666;
+        margin: 0 0 20px 0;
+      }
+
+      .qr-code-text {
+        font-family: "Courier New", monospace;
+        font-size: 12px;
+        color: #999;
+        margin-top: 10px;
+        word-break: break-all;
+      }
+
+      .zone-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-top: 10px;
+      }
+
+      .zone-general .zone-badge {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+
+      .zone-tools .zone-badge {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .zone-consumables .zone-badge {
+        background: #d1fae5;
+        color: #065f46;
+      }
+
+      .zone-electronics .zone-badge {
+        background: #ede9fe;
+        color: #5b21b6;
+      }
+
+      .instructions {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-top: 30px;
+      }
+
+      .instructions h2 {
+        margin-top: 0;
+        color: #333;
+      }
+
+      .instructions ol {
+        color: #666;
+        line-height: 1.8;
+      }
+
+      .instructions li {
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header no-print">
+        <h1>🏢 Códigos QR del Almacén</h1>
+        <p>Sistema de Verificación de Presencia Física</p>
+      </div>
+
+      <div class="controls no-print">
+        <button class="btn" onclick="window.print()">🖨️ Imprimir Todos</button>
+        <button class="btn" onclick="generateQRCodes()">
+          🔄 Regenerar Códigos
+        </button>
+        <button
+          class="btn"
+          style="background: #10b981"
+          onclick="showTestInfo()"
+        >
+          📱 Modo Prueba
+        </button>
+      </div>
+
+      <div
+        id="test-info"
+        class="no-print"
+        style="
+          display: none;
+          background: #dbeafe;
+          border: 2px solid #3b82f6;
+          border-radius: 8px;
+          padding: 20px;
+          margin-bottom: 30px;
+        "
+      >
+        <h3 style="margin-top: 0; color: #1e40af">
+          📱 Modo de Prueba Activado
+        </h3>
+        <p style="color: #1e40af; margin-bottom: 15px">
+          <strong>Para probar el sistema sin imprimir:</strong>
+        </p>
+        <ol style="color: #1e40af; line-height: 1.8">
+          <li>Abre la aplicación en tu teléfono o tablet</li>
+          <li>Ve a "Mis Reservas" y selecciona una reserva activa</li>
+          <li>Haz clic en "Marcar como Recogida"</li>
+          <li>
+            Cuando se abra el scanner, apunta la cámara a cualquiera de los
+            códigos QR en esta pantalla
+          </li>
+          <li>El sistema debería reconocer el código y confirmar la reserva</li>
+        </ol>
+        <p style="color: #1e40af; margin-top: 15px">
+          <strong>💡 Consejo:</strong> Asegúrate de tener buena iluminación y
+          mantén la cámara estable para un mejor escaneo.
+        </p>
+        <button
+          class="btn"
+          style="background: #6b7280; margin-top: 10px"
+          onclick="hideTestInfo()"
+        >
+          Cerrar
+        </button>
+      </div>
+
+      <div class="qr-grid" id="qr-container">
+        <div
+          style="grid-column: 1 / -1; text-align: center; padding: 60px 20px"
+        >
+          <div
+            style="
+              display: inline-block;
+              width: 50px;
+              height: 50px;
+              border: 5px solid #f3f3f3;
+              border-top: 5px solid #dc2626;
+              border-radius: 50%;
+              animation: spin 1s linear infinite;
+            "
+          ></div>
+          <p style="margin-top: 20px; color: #666; font-size: 16px">
+            Cargando códigos QR...
+          </p>
+          <p style="margin-top: 10px; color: #999; font-size: 14px">
+            Si los códigos no aparecen, verifica tu conexión a internet
+          </p>
+        </div>
+      </div>
+
+      <style>
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+      </style>
+
+      <div class="instructions no-print">
+        <h2>📋 Instrucciones de Instalación</h2>
+        <ol>
+          <li>
+            <strong>Imprimir:</strong> Haz clic en "Imprimir Todos" y selecciona
+            una impresora a color para mejores resultados.
+          </li>
+          <li>
+            <strong>Plastificar:</strong> Se recomienda plastificar cada código
+            QR para protegerlo del desgaste y la humedad.
+          </li>
+          <li>
+            <strong>Ubicación:</strong> Coloca cada código QR en la ubicación
+            indicada:
+            <ul>
+              <li>
+                <strong>Entrada Principal:</strong> En la puerta de entrada del
+                almacén, a la altura de los ojos
+              </li>
+              <li>
+                <strong>Zona de Herramientas:</strong> En el área donde se
+                almacenan las herramientas
+              </li>
+              <li>
+                <strong>Zona de Consumibles:</strong> En el área de materiales
+                consumibles
+              </li>
+              <li>
+                <strong>Zona de Electrónicos:</strong> En el área de
+                dispositivos electrónicos
+              </li>
+              <li><strong>Salida:</strong> Cerca de la salida del almacén</li>
+            </ul>
+          </li>
+          <li>
+            <strong>Altura:</strong> Instala los códigos a una altura de 1.2 -
+            1.5 metros para facilitar el escaneo.
+          </li>
+          <li>
+            <strong>Iluminación:</strong> Asegúrate de que haya buena
+            iluminación en cada ubicación.
+          </li>
+          <li>
+            <strong>Visibilidad:</strong> Los códigos deben ser visibles pero no
+            accesibles desde fuera del almacén.
+          </li>
+          <li>
+            <strong>Mantenimiento:</strong> Revisa periódicamente que los
+            códigos estén en buen estado y sean escaneables.
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <script>
+      const warehouseQRCodes = [
+        {
+          code: "WH-QR-001-ENTRANCE",
+          title: "🚪 Entrada Principal",
+          location: "Código QR ubicado en la entrada principal del almacén",
+          zone: "general",
+        },
+        {
+          code: "WH-QR-002-TOOLS",
+          title: "🔧 Zona de Herramientas",
+          location: "Código QR en el área de herramientas y equipos",
+          zone: "tools",
+        },
+        {
+          code: "WH-QR-003-CONSUMABLES",
+          title: "📦 Zona de Consumibles",
+          location: "Código QR en el área de materiales consumibles",
+          zone: "consumables",
+        },
+        {
+          code: "WH-QR-004-ELECTRONICS",
+          title: "💻 Zona de Electrónicos",
+          location: "Código QR en el área de dispositivos electrónicos",
+          zone: "electronics",
+        },
+        {
+          code: "WH-QR-005-EXIT",
+          title: "🚪 Salida del Almacén",
+          location: "Código QR ubicado cerca de la salida del almacén",
+          zone: "general",
+        },
+      ];
+
+      function generateQRCodes() {
+        const container = document.getElementById("qr-container");
+
+        // Check if QRCode library is loaded
+        if (typeof QRCode === "undefined") {
+          container.innerHTML =
+            '<div style="text-align: center; padding: 40px; color: red;"><h2>⚠️ Error: Librería QRCode no cargada</h2><p>Por favor, verifica tu conexión a internet y recarga la página.</p></div>';
+          console.error("QRCode library not loaded");
+          return;
+        }
+
+        container.innerHTML =
+          '<div style="text-align: center; padding: 20px; color: #666;"><p>Generando códigos QR...</p></div>';
+
+        // Small delay to ensure DOM is ready
+        setTimeout(() => {
+          container.innerHTML = "";
+
+          warehouseQRCodes.forEach((qr, index) => {
+            const card = document.createElement("div");
+            card.className = `qr-card zone-${qr.zone}`;
+
+            const title = document.createElement("h2");
+            title.className = "qr-title";
+            title.textContent = qr.title;
+
+            const location = document.createElement("p");
+            location.className = "qr-location";
+            location.textContent = qr.location;
+
+            const canvas = document.createElement("canvas");
+            canvas.id = `qr-${index}`;
+            canvas.className = "qr-code";
+
+            const codeText = document.createElement("p");
+            codeText.className = "qr-code-text";
+            codeText.textContent = qr.code;
+            codeText.style.cursor = "pointer";
+            codeText.title = "Click para copiar";
+            codeText.onclick = () => copyToClipboard(qr.code);
+
+            const badge = document.createElement("span");
+            badge.className = "zone-badge";
+            badge.textContent = qr.zone;
+
+            const testButton = document.createElement("button");
+            testButton.className = "no-print";
+            testButton.textContent = "📋 Copiar Código";
+            testButton.style.cssText =
+              "margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;";
+            testButton.onclick = () => copyToClipboard(qr.code);
+            testButton.onmouseover = function () {
+              this.style.background = "#2563eb";
+            };
+            testButton.onmouseout = function () {
+              this.style.background = "#3b82f6";
+            };
+
+            card.appendChild(title);
+            card.appendChild(location);
+            card.appendChild(canvas);
+            card.appendChild(codeText);
+            card.appendChild(badge);
+            card.appendChild(testButton);
+
+            container.appendChild(card);
+
+            // Generate QR code
+            try {
+              QRCode.toCanvas(
+                canvas,
+                qr.code,
+                {
+                  width: 250,
+                  margin: 2,
+                  color: {
+                    dark: "#000000",
+                    light: "#FFFFFF",
+                  },
+                  errorCorrectionLevel: "M",
+                },
+                function (error) {
+                  if (error) {
+                    console.error("Error generating QR code:", error);
+                    canvas.parentElement.innerHTML +=
+                      '<p style="color: red; font-size: 12px;">Error al generar QR</p>';
+                  } else {
+                    console.log(`QR code ${qr.code} generated successfully`);
+                  }
+                }
+              );
+            } catch (err) {
+              console.error("Exception generating QR code:", err);
+            }
+          });
+
+          console.log("All QR codes generation initiated");
+        }, 100);
+      }
+
+      // Wait for both DOM and QRCode library to be ready
+      let qrCodeLibraryLoaded = false;
+      let domReady = false;
+
+      // Check if QRCode library is loaded
+      function checkQRCodeLibrary() {
+        if (typeof QRCode !== "undefined") {
+          qrCodeLibraryLoaded = true;
+          console.log("QRCode library loaded successfully");
+          tryGenerateQRCodes();
+        } else {
+          console.log("Waiting for QRCode library...");
+          setTimeout(checkQRCodeLibrary, 100);
+        }
+      }
+
+      // Check if DOM is ready
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+          domReady = true;
+          console.log("DOM ready");
+          tryGenerateQRCodes();
+        });
+      } else {
+        domReady = true;
+        console.log("DOM already ready");
+      }
+
+      // Try to generate QR codes when both are ready
+      function tryGenerateQRCodes() {
+        if (qrCodeLibraryLoaded && domReady) {
+          console.log("Both library and DOM ready, generating QR codes...");
+          generateQRCodes();
+        }
+      }
+
+      // Start checking for QRCode library
+      checkQRCodeLibrary();
+
+      // Fallback: try after 2 seconds regardless
+      setTimeout(() => {
+        if (!qrCodeLibraryLoaded || !domReady) {
+          console.warn("Timeout reached, attempting to generate anyway...");
+          generateQRCodes();
+        }
+      }, 2000);
+
+      // Test mode functions
+      function showTestInfo() {
+        document.getElementById("test-info").style.display = "block";
+        // Scroll to the info
+        document
+          .getElementById("test-info")
+          .scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function hideTestInfo() {
+        document.getElementById("test-info").style.display = "none";
+      }
+
+      // Add copy to clipboard functionality for each QR code
+      function copyToClipboard(text) {
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            alert("Código copiado: " + text);
+          })
+          .catch((err) => {
+            console.error("Error copying to clipboard:", err);
+          });
+      }
+    </script>
+  </body>
+</html>
