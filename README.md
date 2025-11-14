@@ -1,4 +1,4 @@
-# 🏢 Sistema de Inventario CCC - Claro
+# 🏢 Sistema de Inventario General
 
 Sistema completo de gestión de inventario para herramientas, consumibles y dispositivos electrónicos con tema personalizado de Claro.
 
