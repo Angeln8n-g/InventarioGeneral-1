@@ -75,8 +75,11 @@ export const ConsumableList: React.FC<ConsumableListProps> = ({
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-      {items.map((item) => {
+      {items.map((item, index) => {
+        // For ConsumableStockAdmin, use stock id; for ConsumableItem, use item id
         const itemId = 'item_type' in item ? item.id : item.id
+        // Create unique key combining type and id to avoid duplicates
+        const uniqueKey = 'item_type' in item ? `stock-${item.id}` : `item-${item.id}-${index}`
         const isRequesting = requestingItemId === itemId
         const isAdjusting = adjustingStockId === itemId
 
@@ -89,7 +92,7 @@ export const ConsumableList: React.FC<ConsumableListProps> = ({
 
         return (
           <ConsumableCard
-            key={itemId}
+            key={uniqueKey}
             item={item}
             role={role}
             onRequest={onRequest ? (quantity) => onRequest(itemId, quantity) : undefined}
