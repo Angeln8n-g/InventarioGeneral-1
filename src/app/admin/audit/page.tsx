@@ -154,7 +154,11 @@ export default function AdminAuditPage() {
       })
 
       if (!response.ok) {
-        throw new Error(t('common.error'))
+        const errorData = await response.json().catch(() => ({ error: t('common.error') }))
+        toastError(errorData.error || t('common.error'))
+        setAuditLogs([])
+        setSummary(null)
+        return
       }
 
       const data = await response.json()
@@ -164,6 +168,8 @@ export default function AdminAuditPage() {
       console.error('Audit logs fetch error:', error)
       const errorMessage = error instanceof Error ? error.message : t('common.error')
       toastError(`${t('common.error')}: ${errorMessage}`)
+      setAuditLogs([])
+      setSummary(null)
     } finally {
       setIsLoadingLogs(false)
     }
@@ -195,7 +201,9 @@ export default function AdminAuditPage() {
       })
 
       if (!response.ok) {
-        throw new Error(t('common.error'))
+        const errorData = await response.json().catch(() => ({ error: t('common.error') }))
+        toastError(errorData.error || t('common.error'))
+        return
       }
 
       const blob = await response.blob()
@@ -207,6 +215,7 @@ export default function AdminAuditPage() {
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
+      toastSuccess(t('common.success'))
     } catch (error: unknown) {
       console.error('Export error:', error)
       const errorMessage = error instanceof Error ? error.message : t('common.error')

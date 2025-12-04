@@ -21,37 +21,12 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 31536000, // 1 year
     qualities: [50, 75, 80, 85, 90, 100], // Configuración de calidades permitidas
   },
-  // Optimize chunk loading
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.optimization = {
-        ...config.optimization,
-        splitChunks: {
-          chunks: 'all',
-          cacheGroups: {
-            default: false,
-            vendors: false,
-            // Vendor chunk
-            vendor: {
-              name: 'vendor',
-              chunks: 'all',
-              test: /node_modules/,
-              priority: 20,
-            },
-            // Common chunk
-            common: {
-              name: 'common',
-              minChunks: 2,
-              chunks: 'all',
-              priority: 10,
-              reuseExistingChunk: true,
-              enforce: true,
-            },
-          },
-        },
-      };
-    }
-    return config;
+  // Turbopack configuration (replaces webpack config)
+  experimental: {
+    turbo: {
+      // Turbopack handles optimization automatically
+      // No need for manual chunk splitting configuration
+    },
   },
 };
 
