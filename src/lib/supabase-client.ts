@@ -35,6 +35,18 @@ import type {
   UpdateElectronicDeviceInput,
 } from '@/types/database'
 import type { NotificationPreferences, NotificationFilter } from '@/types/notifications'
+import type {
+  Classroom,
+  CreateClassroomInput,
+  UpdateClassroomInput,
+  ClassroomWithDeviceCount,
+  DeviceAssignment,
+  DeviceAssignmentWithDetails,
+  CreateDeviceAssignmentInput,
+  DeviceCombination,
+  DeviceCombinationWithDetails,
+  CreateDeviceCombinationInput,
+} from '@/types/classrooms'
 
 // UUID validation utility - Accepts both standard UUIDs and custom QR codes
 export const isValidUUID = (uuid: string): boolean => {
@@ -1115,22 +1127,56 @@ export const electronicDeviceOperations = {
       })
     }
 
-    // Get current loans for each device
-    const deviceIds = results.map(d => (d.tool_instance as unknown as ToolInstance).id)
-    if (deviceIds.length > 0) {
+    // Get current loans and assignments for each device
+    const electronicDeviceIds = results.map(d => d.id)
+    if (electronicDeviceIds.length > 0) {
+      // Get loans
+      const deviceToolInstanceIds = results.map(d => (d.tool_instance as unknown as ToolInstance).id)
       const { data: loans } = await supabase
         .from('loans')
         .select('*')
-        .in('tool_instance_id', deviceIds)
+        .in('tool_instance_id', deviceToolInstanceIds)
         .eq('status', 'active')
 
-      // Attach loans to devices
+      // Get active assignments with classroom info
+      const { data: assignments } = await supabase
+        .from('device_assignments')
+        .select(`
+          *,
+          classroom:classrooms(*)
+        `)
+        .in('electronic_device_id', electronicDeviceIds)
+        .eq('is_active', true)
+
+      // Get custom fields for all devices
+      const { data: customFields } = await supabase
+        .from('device_custom_fields')
+        .select(`
+          *,
+          field:category_fields(*)
+        `)
+        .in('electronic_device_id', electronicDeviceIds)
+
+      // Attach loans, assignments, and custom fields to devices
       results = results.map(device => {
         const toolInstance = device.tool_instance as unknown as ToolInstance
         const loan = loans?.find(l => l.tool_instance_id === toolInstance.id)
+        const assignment = assignments?.find(a => a.electronic_device_id === device.id)
+        
+        // Transform custom fields to a key-value object
+        const deviceCustomFields = customFields?.filter(cf => cf.electronic_device_id === device.id) || []
+        const customFieldsObj: Record<string, unknown> = {}
+        deviceCustomFields.forEach(cf => {
+          if (cf.field?.field_name) {
+            customFieldsObj[cf.field.field_name] = cf.field_value
+          }
+        })
+        
         return {
           ...device,
           current_loan: loan || undefined,
+          current_assignment: assignment || undefined,
+          custom_fields: customFieldsObj,
         }
       })
     }
@@ -1163,9 +1209,27 @@ export const electronicDeviceOperations = {
       .eq('status', 'active')
       .single()
 
+    // Get custom fields for this device
+    const { data: customFields } = await supabase
+      .from('device_custom_fields')
+      .select(`
+        *,
+        field:category_fields(*)
+      `)
+      .eq('electronic_device_id', id)
+
+    // Transform custom fields to a key-value object
+    const customFieldsObj: Record<string, unknown> = {}
+    customFields?.forEach(cf => {
+      if (cf.field?.field_name) {
+        customFieldsObj[cf.field.field_name] = cf.field_value
+      }
+    })
+
     return {
       ...data,
       current_loan: loan || undefined,
+      custom_fields: customFieldsObj,
     }
   },
 
@@ -1235,12 +1299,14 @@ export const electronicDeviceOperations = {
     if (toolError) throw toolError
 
     // Create electronic_device record
-    const { data: electronicDevice, error: deviceError } = await supabase
+    const { data: electronicDevice, error: deviceError} = await supabase
       .from('electronic_devices')
       .insert({
         tool_instance_id: toolInstance.id,
         brand: input.brand || null,
         model: input.model || null,
+        memory_capacity: input.memory_capacity || null,
+        memory_unit: input.memory_unit || null,
       })
       .select()
       .single()
@@ -1335,6 +1401,8 @@ export const electronicDeviceOperations = {
       .update({
         brand: input.brand !== undefined ? input.brand : currentDevice.brand,
         model: input.model !== undefined ? input.model : currentDevice.model,
+        memory_capacity: input.memory_capacity !== undefined ? input.memory_capacity : currentDevice.memory_capacity,
+        memory_unit: input.memory_unit !== undefined ? input.memory_unit : currentDevice.memory_unit,
         updated_at: new Date().toISOString(),
         version: currentDevice.version + 1,
       })
@@ -1385,5 +1453,313 @@ export const electronicDeviceOperations = {
       .from('tool_instances')
       .delete()
       .eq('id', toolInstance.id)
+  },
+
+  /**
+   * Get item type by ID with category information
+   * @param itemTypeId - Item type ID
+   * @returns Item type with category_id or null
+   */
+  async getItemTypeById(itemTypeId: number): Promise<ItemType | null> {
+    const { data, error } = await supabase
+      .from('item_types')
+      .select('*')
+      .eq('id', itemTypeId)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    return data
+  },
+}
+
+// Classroom operations
+export const classroomOperations = {
+  async create(input: CreateClassroomInput): Promise<Classroom> {
+    const { data, error } = await supabase
+      .from('classrooms')
+      .insert({
+        name: input.name,
+        location: input.location,
+        status: input.status,
+        description: input.description || null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async getAll(): Promise<ClassroomWithDeviceCount[]> {
+    const { data, error } = await supabase
+      .from('classrooms')
+      .select('*')
+      .order('name', { ascending: true })
+    if (error) throw error
+    const classrooms = data || []
+    // Compute device counts
+    const { data: assignments } = await supabase
+      .from('device_assignments')
+      .select('classroom_id, is_active')
+      .eq('is_active', true)
+    const counts = (assignments || []).reduce((acc: Record<number, number>, a) => {
+      acc[a.classroom_id] = (acc[a.classroom_id] || 0) + 1
+      return acc
+    }, {})
+    return classrooms.map(c => ({ ...c, device_count: counts[c.id] || 0 }))
+  },
+
+  async getById(id: number): Promise<ClassroomWithDeviceCount | null> {
+    const { data, error } = await supabase
+      .from('classrooms')
+      .select('*')
+      .eq('id', id)
+      .single()
+    if (error && error.code !== 'PGRST116') throw error
+    if (!data) return null
+    const { data: assignments } = await supabase
+      .from('device_assignments')
+      .select('id')
+      .eq('classroom_id', id)
+      .eq('is_active', true)
+    const device_count = (assignments || []).length
+    return { ...data, device_count }
+  },
+
+  async update(id: number, input: UpdateClassroomInput): Promise<Classroom> {
+    const { data, error } = await supabase
+      .from('classrooms')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async delete(id: number): Promise<void> {
+    // Prevent deletion if active assignments exist
+    const { data: assignments } = await supabase
+      .from('device_assignments')
+      .select('id')
+      .eq('classroom_id', id)
+      .eq('is_active', true)
+    if ((assignments || []).length > 0) {
+      const err: any = new Error('Classroom has assigned devices')
+      err.code = 'HAS_ASSIGNED_DEVICES'
+      throw err
+    }
+    const { error } = await supabase
+      .from('classrooms')
+      .delete()
+      .eq('id', id)
+    if (error) throw error
+  },
+}
+
+// Device assignment operations
+export const assignmentOperations = {
+  async create(input: CreateDeviceAssignmentInput, userId?: number): Promise<DeviceAssignmentWithDetails> {
+    const { data, error } = await supabase
+      .from('device_assignments')
+      .insert({
+        electronic_device_id: input.electronic_device_id,
+        classroom_id: input.classroom_id,
+        notes: input.notes || null,
+        assigned_by: userId || null,
+      })
+      .select(`
+        *,
+        device:electronic_devices(*, tool_instance:tool_instances(*, item_type:item_types(*))),
+        classroom:classrooms(*)
+      `)
+      .single()
+    if (error) throw error
+    return data as unknown as DeviceAssignmentWithDetails
+  },
+
+  async getAll(filters?: { classroom_id?: number; electronic_device_id?: number; status?: 'active' | 'removed' }): Promise<DeviceAssignmentWithDetails[]> {
+    let query = supabase
+      .from('device_assignments')
+      .select(`
+        *,
+        device:electronic_devices(*, tool_instance:tool_instances(*, item_type:item_types(*))),
+        classroom:classrooms(*),
+        assigned_by_user:users!device_assignments_assigned_by_fkey(*),
+        removed_by_user:users!device_assignments_removed_by_fkey(*)
+      `)
+      .order('created_at', { ascending: false })
+    if (filters?.classroom_id) query = query.eq('classroom_id', filters.classroom_id)
+    if (filters?.electronic_device_id) query = query.eq('electronic_device_id', filters.electronic_device_id)
+    if (filters?.status) query = query.eq('is_active', filters.status === 'active')
+    const { data, error } = await query
+    if (error) throw error
+    return (data || []) as unknown as DeviceAssignmentWithDetails[]
+  },
+
+  async getById(id: number): Promise<DeviceAssignmentWithDetails | null> {
+    const { data, error } = await supabase
+      .from('device_assignments')
+      .select(`
+        *,
+        device:electronic_devices(*, tool_instance:tool_instances(*, item_type:item_types(*))),
+        classroom:classrooms(*),
+        assigned_by_user:users!device_assignments_assigned_by_fkey(*),
+        removed_by_user:users!device_assignments_removed_by_fkey(*)
+      `)
+      .eq('id', id)
+      .single()
+    if (error && error.code !== 'PGRST116') throw error
+    return (data || null) as unknown as DeviceAssignmentWithDetails | null
+  },
+
+  async getByClassroom(classroomId: number): Promise<DeviceAssignmentWithDetails[]> {
+    return this.getAll({ classroom_id: classroomId })
+  },
+
+  async getByDevice(deviceId: number): Promise<DeviceAssignmentWithDetails[]> {
+    return this.getAll({ electronic_device_id: deviceId })
+  },
+
+  async remove(id: number, userId?: number): Promise<DeviceAssignment> {
+    const { data, error } = await supabase
+      .from('device_assignments')
+      .update({
+        is_active: false,
+        removed_date: new Date().toISOString(),
+        removed_by: userId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error) throw error
+    return data as unknown as DeviceAssignment
+  },
+}
+
+// Device combination operations
+export const combinationOperations = {
+  async create(input: CreateDeviceCombinationInput, userId?: number): Promise<DeviceCombinationWithDetails> {
+    const { data, error } = await supabase
+      .from('device_combinations')
+      .insert({
+        device_1_id: input.device_1_id,
+        device_2_id: input.device_2_id,
+        combination_type: input.combination_type || null,
+        notes: input.notes || null,
+        created_by: userId || null,
+      })
+      .select(`
+        *,
+        device_1:electronic_devices!device_combinations_device_1_id_fkey(*, tool_instance:tool_instances(*, item_type:item_types(*))),
+        device_2:electronic_devices!device_combinations_device_2_id_fkey(*, tool_instance:tool_instances(*, item_type:item_types(*)))
+      `)
+      .single()
+    if (error) throw error
+    return data as unknown as DeviceCombinationWithDetails
+  },
+
+  async getAll(filters?: { classroom_id?: number }): Promise<DeviceCombinationWithDetails[]> {
+    let query = supabase
+      .from('device_combinations')
+      .select(`
+        *,
+        device_1:electronic_devices!device_combinations_device_1_id_fkey(*, tool_instance:tool_instances(*, item_type:item_types(*))),
+        device_2:electronic_devices!device_combinations_device_2_id_fkey(*, tool_instance:tool_instances(*, item_type:item_types(*))),
+        creator:users!device_combinations_created_by_fkey(id, username, full_name)
+      `)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+    if (filters?.classroom_id) {
+      // filter combinations where both devices have active assignments in classroom
+      const { data: assignments } = await supabase
+        .from('device_assignments')
+        .select('electronic_device_id')
+        .eq('classroom_id', filters.classroom_id)
+        .eq('is_active', true)
+      const ids = (assignments || []).map(a => a.electronic_device_id)
+      query = query.in('device_1_id', ids).in('device_2_id', ids)
+    }
+    const { data, error } = await query
+    if (error) throw error
+
+    // Get device IDs to fetch their classroom assignments
+    const combinations = data || []
+    const deviceIds = new Set<number>()
+    combinations.forEach(c => {
+      deviceIds.add(c.device_1_id)
+      deviceIds.add(c.device_2_id)
+    })
+
+    // Fetch active assignments for all devices
+    const { data: assignments } = await supabase
+      .from('device_assignments')
+      .select(`
+        electronic_device_id,
+        classroom:classrooms(id, name, location)
+      `)
+      .in('electronic_device_id', Array.from(deviceIds))
+      .eq('is_active', true)
+
+    // Create a map of device ID to classroom
+    const deviceClassroomMap: Record<number, { id: number; name: string; location?: string }> = {}
+    assignments?.forEach((a: any) => {
+      if (a.classroom) {
+        // Handle both single object and array cases
+        const classroom = Array.isArray(a.classroom) ? a.classroom[0] : a.classroom
+        if (classroom) {
+          deviceClassroomMap[a.electronic_device_id] = {
+            id: classroom.id,
+            name: classroom.name,
+            location: classroom.location,
+          }
+        }
+      }
+    })
+
+    // Attach classroom info to combinations
+    const combinationsWithClassroom = combinations.map(c => ({
+      ...c,
+      classroom: deviceClassroomMap[c.device_1_id] || deviceClassroomMap[c.device_2_id] || null,
+    }))
+
+    return combinationsWithClassroom as unknown as DeviceCombinationWithDetails[]
+  },
+
+  async getById(id: number): Promise<DeviceCombinationWithDetails | null> {
+    const { data, error } = await supabase
+      .from('device_combinations')
+      .select(`
+        *,
+        device_1:electronic_devices!device_combinations_device_1_id_fkey(*, tool_instance:tool_instances(*, item_type:item_types(*))),
+        device_2:electronic_devices!device_combinations_device_2_id_fkey(*, tool_instance:tool_instances(*, item_type:item_types(*)))
+      `)
+      .eq('id', id)
+      .single()
+    if (error && error.code !== 'PGRST116') throw error
+    return (data || null) as unknown as DeviceCombinationWithDetails | null
+  },
+
+  async getByClassroom(classroomId: number): Promise<DeviceCombinationWithDetails[]> {
+    return this.getAll({ classroom_id: classroomId })
+  },
+
+  async remove(id: number, userId?: number): Promise<DeviceCombination> {
+    const { data, error } = await supabase
+      .from('device_combinations')
+      .update({
+        is_active: false,
+        removed_date: new Date().toISOString(),
+        removed_by: userId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error) throw error
+    return data as unknown as DeviceCombination
   },
 }

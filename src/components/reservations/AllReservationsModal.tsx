@@ -1,8 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Dialog } from '@/components/ui/Dialog'
-import { ModalHeader } from '@/components/shared/ModalHeader'
+import { TransitionDialog } from '@/components/ui/TransitionDialog'
 import { Users, Package, Clock, AlertTriangle, Search } from 'lucide-react'
 import type { ReservationDetails } from '@/types/database'
 
@@ -97,8 +96,15 @@ export function AllReservationsModal({ isOpen, onClose }: AllReservationsModalPr
   }
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} size="xl" showCloseButton={false}>
-      <ModalHeader title="👥 Reservas Activas del Sistema" onClose={onClose} />
+    <TransitionDialog
+      open={isOpen}
+      onClose={onClose}
+      animationType="scale"
+      speed="normal"
+      enableHaptics={true}
+      className="!max-w-4xl"
+      title="👥 Reservas Activas del Sistema"
+    >
 
       <div className="p-6">
         {/* Stats Summary */}
@@ -257,6 +263,6 @@ export function AllReservationsModal({ isOpen, onClose }: AllReservationsModalPr
           )}
         </div>
       </div>
-    </Dialog>
+    </TransitionDialog>
   )
 }

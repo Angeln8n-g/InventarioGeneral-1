@@ -310,3 +310,203 @@ export async function PATCH(
     )
   }
 }
+
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    return await withPermission(request, PERMISSIONS.ADMIN_MANAGE_CONSUMABLES, async (authContext) => {
+      const { id } = await params
+      const consumableId = parseInt(id, 10)
+
+      if (isNaN(consumableId)) {
+        return NextResponse.json(
+          {
+            error: {
+              code: ERROR_CODES.VALIDATION_ERROR,
+              message: 'Invalid consumable ID',
+              timestamp: new Date().toISOString(),
+            },
+          },
+          { status: 400 }
+        )
+      }
+
+      // Get current consumable data for audit log
+      const { data: currentConsumable, error: fetchError } = await supabase
+        .from('consumable_stock')
+        .select(`
+          *,
+          item_type:item_types(*)
+        `)
+        .eq('id', consumableId)
+        .single()
+
+      if (fetchError || !currentConsumable) {
+        return NextResponse.json(
+          {
+            error: {
+              code: ERROR_CODES.NOT_FOUND,
+              message: 'Consumable not found',
+              timestamp: new Date().toISOString(),
+            },
+          },
+          { status: 404 }
+        )
+      }
+
+      // Check for active reservations
+      const { data: activeReservations, error: reservationsError } = await supabase
+        .from('consumable_reservations')
+        .select('id')
+        .eq('item_type_id', currentConsumable.item_type_id)
+        .eq('status', 'active')
+        .limit(1)
+
+      if (reservationsError) {
+        console.error('Error checking reservations:', reservationsError)
+      }
+
+      if (activeReservations && activeReservations.length > 0) {
+        return NextResponse.json(
+          {
+            error: {
+              code: ERROR_CODES.VALIDATION_ERROR,
+              message: 'Cannot delete consumable with active reservations. Please cancel or fulfill all reservations first.',
+              timestamp: new Date().toISOString(),
+            },
+          },
+          { status: 400 }
+        )
+      }
+
+      // Delete stock movements first (foreign key constraint)
+      const { error: movementsError } = await supabase
+        .from('stock_movements')
+        .delete()
+        .eq('consumable_stock_id', consumableId)
+
+      if (movementsError) {
+        console.error('Error deleting stock movements:', movementsError)
+        // Continue anyway, some tables might not have this constraint
+      }
+
+      // Delete consumable returns
+      const { error: returnsError } = await supabase
+        .from('consumable_returns')
+        .delete()
+        .eq('consumable_stock_id', consumableId)
+
+      if (returnsError) {
+        console.error('Error deleting consumable returns:', returnsError)
+      }
+
+      // Delete consumable_stock record
+      const { error: stockError } = await supabase
+        .from('consumable_stock')
+        .delete()
+        .eq('id', consumableId)
+
+      if (stockError) {
+        console.error('Error deleting consumable stock:', stockError)
+        return NextResponse.json(
+          {
+            error: {
+              code: ERROR_CODES.DATABASE_ERROR,
+              message: 'Failed to delete consumable. It may have related records.',
+              timestamp: new Date().toISOString(),
+            },
+          },
+          { status: 500 }
+        )
+      }
+
+      // Optionally delete the item_type if no other stocks reference it
+      const { data: otherStocks } = await supabase
+        .from('consumable_stock')
+        .select('id')
+        .eq('item_type_id', currentConsumable.item_type_id)
+        .limit(1)
+
+      if (!otherStocks || otherStocks.length === 0) {
+        // No other stocks reference this item_type, safe to delete
+        const { error: itemTypeError } = await supabase
+          .from('item_types')
+          .delete()
+          .eq('id', currentConsumable.item_type_id)
+
+        if (itemTypeError) {
+          console.error('Error deleting item type:', itemTypeError)
+          // Not critical, consumable is already deleted
+        }
+      }
+
+      // Log audit event
+      try {
+        await auditLogOperations.create({
+          user_id: authContext.user.id,
+          action: 'consumable_delete',
+          entity_type: 'consumable',
+          entity_id: consumableId,
+          old_values: {
+            name: currentConsumable.item_type.name,
+            description: currentConsumable.item_type.description,
+            category: currentConsumable.item_type.category,
+            current_quantity: currentConsumable.current_quantity,
+            unit_of_measure: currentConsumable.unit_of_measure,
+          },
+          new_values: null,
+        })
+      } catch (auditError) {
+        console.error('Failed to create audit log:', auditError)
+      }
+
+      return NextResponse.json({
+        message: 'Consumable deleted successfully',
+        deleted_id: consumableId,
+        deleted_name: currentConsumable.item_type.name,
+      })
+    })
+  } catch (error: unknown) {
+    console.error('Consumable delete error:', error)
+
+    if (error instanceof Error && error.name === 'AuthenticationError') {
+      return NextResponse.json(
+        {
+          error: {
+            code: ERROR_CODES.AUTHENTICATION_ERROR,
+            message: error.message,
+            timestamp: new Date().toISOString(),
+          },
+        },
+        { status: 401 }
+      )
+    }
+
+    if (error instanceof Error && error.name === 'AuthorizationError') {
+      return NextResponse.json(
+        {
+          error: {
+            code: ERROR_CODES.AUTHORIZATION_ERROR,
+            message: error.message,
+            timestamp: new Date().toISOString(),
+          },
+        },
+        { status: 403 }
+      )
+    }
+
+    return NextResponse.json(
+      {
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: ERROR_MESSAGES.GENERIC_ERROR,
+          timestamp: new Date().toISOString(),
+        },
+      },
+      { status: 500 }
+    )
+  }
+}

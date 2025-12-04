@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { X, Search, User, Calendar, Package } from 'lucide-react'
+import { Search, User, Calendar, Package } from 'lucide-react'
+import { TransitionDialog } from '@/components/ui/TransitionDialog'
 
 interface Loan {
   id: number
@@ -83,37 +84,17 @@ export const ActiveLoansFilterModal: React.FC<ActiveLoansFilterModalProps> = ({
     return new Date(dueDate) < new Date()
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-card-light dark:bg-card-dark rounded-lg shadow-xl max-w-5xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 bg-card-light dark:bg-card-dark border-b border-gray-200 dark:border-gray-700 p-3 sm:p-4 flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-2">
-              <h2 className="text-lg sm:text-xl font-semibold text-text-light dark:text-text-dark truncate">
-                Préstamos Activos
-              </h2>
-              {(searchTerm || selectedUserId !== 'all') && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary flex-shrink-0">
-                  Filtrado
-                </span>
-              )}
-            </div>
-            <p className="text-xs sm:text-sm text-text-secondary-light dark:text-text-secondary-dark mt-1 truncate">
-              {filteredLoans.length} {filteredLoans.length === 1 ? 'préstamo' : 'préstamos'}
-              {selectedUserId !== 'all' && ` de ${users.find(u => u.id === selectedUserId)?.username}`}
-              {loans.length !== filteredLoans.length && ` de ${loans.length} totales`}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-text-secondary-light dark:text-text-secondary-dark hover:text-text-light dark:hover:text-text-dark transition-colors flex-shrink-0 ml-2"
-          >
-            <X className="w-5 h-5 sm:w-6 sm:h-6" />
-          </button>
-        </div>
+    <TransitionDialog
+      open={isOpen}
+      onClose={onClose}
+      animationType="auto"
+      speed="fast"
+      enableHaptics={true}
+      className="!max-w-5xl !max-h-[95vh] sm:!max-h-[90vh] flex flex-col"
+      title="Préstamos Activos"
+      description={`${filteredLoans.length} ${filteredLoans.length === 1 ? 'préstamo' : 'préstamos'}${selectedUserId !== 'all' ? ` de ${users.find(u => u.id === selectedUserId)?.username}` : ''}${loans.length !== filteredLoans.length ? ` de ${loans.length} totales` : ''}`}
+    >
 
         {/* Filters */}
         <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700 space-y-2 sm:space-y-3">
@@ -314,7 +295,6 @@ export const ActiveLoansFilterModal: React.FC<ActiveLoansFilterModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </TransitionDialog>
   )
 }

@@ -409,7 +409,12 @@
   - Habilitar haptics en móvil
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 5.2_
 
-- [ ] 10.2 Migrar RequestToolsModal
+- [x] 10.2 Migrar RequestToolsModal
+
+
+
+
+
 
   - Modificar archivo `src/components/dashboard/RequestToolsModal.tsx`
   - Reemplazar `Dialog` con `TransitionDialog`
@@ -419,7 +424,9 @@
   - Habilitar haptics
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 5.2_
 
-- [ ] 10.3 Migrar ReturnMaterialsModal
+- [x] 10.3 Migrar ReturnMaterialsModal
+
+
 
   - Modificar archivo `src/components/dashboard/ReturnMaterialsModal.tsx`
   - Reemplazar `Dialog` con `TransitionDialog`
@@ -428,7 +435,9 @@
 
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 5.2_
 
-- [ ] 10.4 Migrar ReturnToolsModal
+- [x] 10.4 Migrar ReturnToolsModal
+
+
 
   - Modificar archivo `src/components/dashboard/ReturnToolsModal.tsx`
   - Reemplazar `Dialog` con `TransitionDialog`
@@ -437,7 +446,9 @@
   - Configurar speed 'normal'
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 5.2_
 
-- [ ] 10.5 Migrar QuantityModal
+- [x] 10.5 Migrar QuantityModal
+
+
 
   - Modificar archivo `src/components/scanner/QuantityModal.tsx`
   - Reemplazar `Dialog` con `TransitionDialog`
@@ -460,7 +471,9 @@
   - Configurar speed 'normal'
   - _Requirements: 2.1, 2.2, 2.3, 5.2_
 
-- [ ] 11.2 Migrar AllReservationsModal
+- [x] 11.2 Migrar AllReservationsModal
+
+
 
   - Modificar archivo `src/components/reservations/AllReservationsModal.tsx`
   - Reemplazar `Dialog` con `TransitionDialog`
@@ -468,7 +481,9 @@
   - Configurar speed 'normal'
   - _Requirements: 2.1, 2.2, 2.3, 5.2_
 
-- [ ] 11.3 Migrar ReservationsHistoryModal
+- [x] 11.3 Migrar ReservationsHistoryModal
+
+
 
   - Modificar archivo `src/components/reservations/ReservationsHistoryModal.tsx`
   - Reemplazar `Dialog` con `TransitionDialog`
@@ -485,7 +500,9 @@
   - Migrar AvailableElectronicsModal
   - _Requirements: 2.1, 2.2, 2.3, 5.2_
 
-- [ ] 12.1 Migrar AvailableToolsFilterModal
+- [x] 12.1 Migrar AvailableToolsFilterModal
+
+
 
   - Modificar archivo `src/components/tools/AvailableToolsFilterModal.tsx`
   - Reemplazar `Dialog` con `TransitionDialog`
@@ -495,7 +512,9 @@
   - Configurar speed 'fast'
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 5.2_
 
-- [ ] 12.2 Migrar ActiveLoansFilterModal
+- [x] 12.2 Migrar ActiveLoansFilterModal
+
+
 
   - Modificar archivo `src/components/loans/ActiveLoansFilterModal.tsx`
 
@@ -504,7 +523,10 @@
   - Configurar speed 'fast'
   - _Requirements: 2.1, 2.2, 2.3, 4.1, 5.2_
 
-- [ ] 12.3 Migrar AvailableElectronicsModal
+- [x] 12.3 Migrar AvailableElectronicsModal
+
+
+
   - Modificar archivo `src/components/electronics/AvailableElectronicsModal.tsx`
   - Reemplazar `Dialog` con `TransitionDialog`
   - Aplicar animación auto según dispositivo

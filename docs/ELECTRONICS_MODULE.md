@@ -1,7 +1,7 @@
 # Electronics Management Module
 
 ## Overview
-Complete module for managing electronic devices (laptops, tablets, smartphones, etc.) in the inventory system.
+Complete module for managing electronic devices (laptops, tablets, smartphones, etc.) in the inventory system. This module includes memory capacity tracking, classroom management, device assignments, device combinations, and comprehensive reporting.
 
 ## Features
 ✅ CRUD operations for electronic devices
@@ -12,199 +12,472 @@ Complete module for managing electronic devices (laptops, tablets, smartphones, 
 ✅ Condition notes
 ✅ Integration with loans system
 ✅ Filtering and search capabilities
+✅ **Memory capacity tracking** (GB/TB for applicable devices)
+✅ **Edit modal for quick device updates**
+✅ **Classroom management system**
+✅ **Device assignment to classrooms**
+✅ **Device combinations (workstations)**
+✅ **Assignment history tracking**
+✅ **Classroom equipment reports**
+
+---
+
+## Memory Capacity Feature
+
+### Overview
+Track memory capacity (RAM/Storage) for electronic devices where applicable. Memory fields are only shown for device categories where memory is relevant.
+
+### Applicable Categories
+- **Laptops** - RAM and storage capacity
+- **Tablets** - Storage capacity
+- **Smartphones** - Storage capacity
+
+### Memory Units
+- **GB** (Gigabytes) - For most devices
+- **TB** (Terabytes) - For high-capacity storage
+
+### Usage
+1. When creating or editing a Laptop, Tablet, or Smartphone, the memory capacity field appears
+2. Enter a numeric value (e.g., 16)
+3. Select the unit (GB or TB)
+4. The system displays formatted values like "16 GB" or "1 TB"
+
+### API Fields
+```typescript
+{
+  memory_capacity?: number  // e.g., 16, 256, 1
+  memory_unit?: 'GB' | 'TB' // Unit of measurement
+}
+```
+
+---
+
+## Edit Modal
+
+### Overview
+Quick inline editing of electronic devices without navigating away from the list view.
+
+### How to Use
+1. Navigate to **Admin > Electrónicos**
+2. Find the device you want to edit
+3. Click the **Edit** button on the device card
+4. Modify the fields in the modal dialog
+5. Click **Guardar** to save changes or **Cancelar** to discard
+
+### Editable Fields
+- Name
+- Category
+- Description
+- Brand
+- Model
+- Serial Number
+- Memory Capacity (for applicable categories)
+- Status
+- Condition Notes
+
+### Validation
+- Required fields must be filled
+- Memory capacity must be a positive number
+- Changes are validated before submission
+
+---
+
+## Classroom Management
+
+### Overview
+Manage physical spaces (classrooms/aulas) where electronic equipment is assigned and used.
+
+### Navigation
+**Admin Dashboard > Aulas** or `/admin/classrooms`
+
+### Classroom Properties
+| Field | Description | Required |
+|-------|-------------|----------|
+| Name | Classroom identifier (e.g., "Aula 101") | Yes |
+| Location | Physical location (e.g., "Edificio A, Piso 2") | Yes |
+| Status | Operational state | Yes |
+| Responsible Person | Person in charge of the classroom | No |
+| Description | Additional notes | No |
+
+### Status Values
+- **active** - Classroom is operational
+- **inactive** - Classroom is not in use
+- **maintenance** - Classroom is under maintenance
+
+### Operations
+
+#### Create Classroom
+1. Go to **Admin > Aulas**
+2. Click **Crear Aula**
+3. Fill in the required fields
+4. Click **Guardar**
+
+#### Edit Classroom
+1. Go to **Admin > Aulas**
+2. Click **Ver** on the classroom row
+3. Click **Editar**
+4. Modify fields and save
+
+#### Delete Classroom
+1. Go to **Admin > Aulas**
+2. Click **Ver** on the classroom row
+3. Click **Eliminar**
+4. Confirm deletion
+
+**Note:** Classrooms with assigned devices cannot be deleted. Remove all device assignments first.
+
+### Uniqueness Constraint
+Classroom names must be unique within the same location. You can have "Aula 101" in "Edificio A" and "Aula 101" in "Edificio B".
+
+---
+
+## Device Assignment System
+
+### Overview
+Link electronic devices to specific classrooms to track equipment location and usage.
+
+### Navigation
+**Admin Dashboard > Asignaciones** or `/admin/assignments`
+
+### Assignment Page Layout
+The page is divided into sections:
+1. **Classrooms Panel** (left) - Select a classroom to manage
+2. **Available Devices** - Devices not assigned to any classroom
+3. **Devices in Other Classrooms** - Shows where other devices are located
+4. **Assigned Devices** - Devices in the selected classroom
+5. **Device Combinations** - Paired devices in the classroom
+6. **Summary Statistics** - Quick overview of counts
+
+### Assigning a Device
+1. Select a classroom from the left panel
+2. Find the device in "Dispositivos Disponibles"
+3. Click **Asignar**
+4. The device moves to "Dispositivos Asignados"
+
+### Removing an Assignment
+1. Select the classroom containing the device
+2. Find the device in "Dispositivos Asignados"
+3. Click **Remover**
+4. Confirm the removal
+5. The device returns to "Dispositivos Disponibles"
+
+### Filtering Devices
+- **Search** - Filter by name, serial number, brand, or model
+- **Category** - Filter by device category (Laptops, Tablets, etc.)
+- **Status** - Show active, removed, or all assignments
+
+---
+
+## Device Combinations (Workstations)
+
+### Overview
+Combine two devices that work together as a unit (e.g., a monitor with a CPU, or a laptop with a docking station).
+
+### Requirements
+- Both devices must be assigned to the **same classroom**
+- Only 2 devices can be combined at a time
+- Devices can only be in one active combination
+
+### Creating a Combination
+1. Go to **Admin > Asignaciones**
+2. Select the classroom
+3. In "Dispositivos Asignados", check the boxes for 2 devices
+4. Click **Combinar dispositivos seleccionados**
+5. The combination appears in "Combinaciones de Dispositivos"
+
+### Removing a Combination
+1. Find the combination in "Combinaciones de Dispositivos"
+2. Click **Desenlazar**
+3. Confirm the removal
+4. Both devices remain assigned to the classroom (only the link is removed)
+
+### Visual Indicators
+- Combined devices show a link icon (🔗)
+- Combinations display both device names together
+- The combination type (e.g., "Workstation") is shown
+
+---
+
+## Assignment History
+
+### Overview
+Track when and where devices have been located over time, including who made the assignments.
+
+### Device History
+View a device's assignment history:
+1. Go to **Admin > Electrónicos**
+2. Click on a device to view details
+3. The "Historial de Asignaciones" section shows:
+   - Current assignment (if any)
+   - Past assignments with dates
+   - Administrator who made each assignment
+
+### Classroom History
+View a classroom's device history:
+1. Go to **Admin > Aulas**
+2. Click **Ver** on a classroom
+3. The detail page shows:
+   - Currently assigned devices
+   - Historical assignments
+   - Assignment and removal dates
+
+### History Record Fields
+| Field | Description |
+|-------|-------------|
+| Assigned Date | When the device was assigned |
+| Removed Date | When the device was removed (if applicable) |
+| Classroom | The classroom name and location |
+| Assigned By | Administrator who created the assignment |
+| Removed By | Administrator who removed the assignment |
+
+---
+
+## Classroom Equipment Reports
+
+### Overview
+Generate comprehensive reports on device distribution across classrooms.
+
+### Navigation
+**Admin Dashboard > Reportes > Equipos por Aula** or `/admin/reports/classroom-equipment`
+
+### Report Contents
+
+#### Summary Statistics
+- Total classrooms
+- Total devices assigned
+- Total combinations
+- Classrooms with devices
+- Empty classrooms
+- Incomplete workstations
+
+#### Per-Classroom Details
+- Classroom name and location
+- Status (active/inactive/maintenance)
+- Total device count
+- Devices by category breakdown
+- Incomplete workstation count
+- Expandable device list
+
+### Incomplete Workstations
+The report identifies devices that should be paired but aren't. For example:
+- A monitor without a CPU
+- A CPU without a monitor
+- A laptop without a docking station
+
+### Export Options
+- **CSV Export** - Download report data as a CSV file
+- Click **Exportar CSV** to download
+
+### Expanding Details
+Click on any classroom row to expand and see:
+- Full device list
+- Device names, categories, brands
+- Serial numbers
+- Combination status
+
+---
 
 ## Database Schema
 
 ### Tables
 - `electronic_devices` - Main table for electronic device records
-- `tool_instances` - Links to tool instances (inherited from tools system)
-- `item_types` - Device types and categories
+- `classrooms` - Physical spaces for equipment
+- `device_assignments` - Links devices to classrooms
+- `device_combinations` - Pairs of related devices
 
 ### Relationships
 ```
 electronic_devices
   ├─ tool_instance_id → tool_instances (one-to-one)
   │   └─ item_type_id → item_types (many-to-one)
-  └─ current_loan → loans (optional, one-to-one)
+  ├─ current_loan → loans (optional, one-to-one)
+  └─ device_assignments → classrooms (many-to-many through assignments)
+
+classrooms
+  └─ device_assignments → electronic_devices (one-to-many)
+
+device_combinations
+  ├─ device_1_id → electronic_devices
+  └─ device_2_id → electronic_devices
 ```
+
+---
 
 ## API Endpoints
 
-### GET /api/admin/electronics
+### Electronics API
+
+#### GET /api/admin/electronics
 Fetch all electronic devices with optional filters.
 
 **Query Parameters:**
-- `status` - Filter by device status (available, loaned, etc.)
-- `category` - Filter by category (Laptops, Tablets, etc.)
+- `status` - Filter by device status
+- `category` - Filter by category
 - `search` - Search by name, brand, model, or serial number
 
-**Response:**
-```json
-{
-  "data": [...],
-  "total": 5,
-  "summary": {
-    "by_status": { "available": 4, "loaned": 1 },
-    "by_category": { "Laptops": 2, "Tablets": 2, "Smartphones": 1 }
-  }
-}
-```
+**Response includes:**
+- Memory capacity and unit (if set)
+- Device details and relationships
 
-### POST /api/admin/electronics
+#### POST /api/admin/electronics
 Create a new electronic device.
 
-**Body:**
+**Body (with memory):**
 ```json
 {
   "name": "MacBook Pro 14\"",
-  "description": "Apple MacBook Pro 14 inch laptop",
   "category": "Laptops",
   "brand": "Apple",
   "model": "MacBook Pro 14\" M1 Pro",
   "serial_number": "C02XJ0AAJGH5",
   "status": "available",
-  "condition_notes": "Excellent condition"
+  "memory_capacity": 16,
+  "memory_unit": "GB"
 }
 ```
 
-### GET /api/admin/electronics/[id]
-Get a specific electronic device by ID.
+#### PUT /api/admin/electronics/[id]
+Update an electronic device (including memory fields).
 
-### PUT /api/admin/electronics/[id]
-Update an electronic device.
+### Classrooms API
 
-### DELETE /api/admin/electronics/[id]
-Delete an electronic device (only if not currently loaned).
+#### GET /api/admin/classrooms
+List all classrooms with device counts.
 
-## Components
+#### POST /api/admin/classrooms
+Create a new classroom.
 
-### ElectronicDeviceCard
-Displays device information in a card format.
+#### GET /api/admin/classrooms/[id]
+Get classroom details with assignments.
 
-**Props:**
-- `device: ElectronicDeviceWithDetails`
-- `onViewDetails: () => void`
+#### PUT /api/admin/classrooms/[id]
+Update a classroom.
 
-### ElectronicDeviceModal
-Modal for viewing detailed device information.
+#### DELETE /api/admin/classrooms/[id]
+Delete a classroom (fails if devices are assigned).
 
-**Props:**
-- `device: ElectronicDeviceWithDetails`
-- `onClose: () => void`
-- `onEdit: () => void`
-- `onDelete: () => void`
-- `isDeleting: boolean`
+### Device Assignments API
 
-### ElectronicDeviceForm
-Form for creating/editing devices.
+#### GET /api/admin/device-assignments
+List all assignments with filters.
 
-**Props:**
-- `device?: ElectronicDeviceWithDetails` (optional, for editing)
-- `onSubmit: (data) => Promise<void>`
-- `onCancel: () => void`
-- `isSubmitting: boolean`
+**Query Parameters:**
+- `status` - Filter by active/removed
+- `classroom_id` - Filter by classroom
+- `device_id` - Filter by device
 
-## Pages
+#### POST /api/admin/device-assignments
+Create a new assignment.
 
-### /admin/electronics
-Main listing page with filters and search.
-
-### /admin/electronics/new
-Create new electronic device.
-
-### /admin/electronics/[id]
-Edit existing electronic device.
-
-## Migrations
-
-### 008_add_electronic_devices.sql
-Creates the `electronic_devices` table with proper relationships.
-
-### 009_seed_electronic_devices.sql
-Seeds the database with 5 sample devices for testing.
-
-### 010_fix_duplicate_foreign_key.sql
-Removes duplicate foreign key constraint for cleaner queries.
-
-## Usage Examples
-
-### Creating a Device
-```typescript
-const newDevice = await electronicDeviceOperations.create({
-  name: 'iPad Pro 11"',
-  category: 'Tablets',
-  brand: 'Apple',
-  model: 'iPad Pro 11" (3rd Gen)',
-  serial_number: 'DMXK2LL/A',
-  status: 'available',
-  condition_notes: 'Good condition',
-})
+```json
+{
+  "electronic_device_id": 1,
+  "classroom_id": 5,
+  "notes": "Assigned for training room"
+}
 ```
 
-### Fetching Devices with Filters
-```typescript
-const devices = await electronicDeviceOperations.getAll({
-  status: 'available',
-  category: 'Laptops',
-  search: 'MacBook',
-})
+#### DELETE /api/admin/device-assignments/[id]
+Remove an assignment (soft delete - preserves history).
+
+#### GET /api/admin/device-assignments/by-classroom/[classroomId]
+Get all assignments for a specific classroom.
+
+#### GET /api/admin/device-assignments/by-device/[deviceId]
+Get assignment history for a specific device.
+
+### Device Combinations API
+
+#### GET /api/admin/device-combinations
+List all device combinations.
+
+#### POST /api/admin/device-combinations
+Create a new combination.
+
+```json
+{
+  "device_1_id": 1,
+  "device_2_id": 2,
+  "combination_type": "Workstation",
+  "notes": "Monitor and CPU pair"
+}
 ```
 
-### Type-Safe Data Extraction
-```typescript
-import { getDeviceData } from '@/types/electronics'
+#### DELETE /api/admin/device-combinations/[id]
+Remove a combination (preserves individual assignments).
 
-const { toolInstance, itemType } = getDeviceData(device)
-console.log(itemType.name) // Type-safe access
+#### GET /api/admin/device-combinations/by-classroom/[classroomId]
+Get all combinations in a specific classroom.
+
+### Reports API
+
+#### GET /api/admin/reports/classroom-equipment
+Generate classroom equipment report.
+
+**Response:**
+```json
+{
+  "data": [...],
+  "summary": {
+    "total_classrooms": 10,
+    "total_devices_assigned": 45,
+    "total_combinations": 12,
+    "classrooms_with_devices": 8,
+    "classrooms_without_devices": 2,
+    "total_incomplete_workstations": 3
+  },
+  "generated_at": "2024-01-15T10:30:00Z"
+}
 ```
 
-## Testing
+---
 
-### Test Connection Page
-Navigate to `/admin/test-connection` to:
-- Test authentication
-- Verify database connectivity
-- Test API endpoints
-- Seed sample devices
+## Security
 
-### Sample Data
-Use the "🌱 Seed Sample Devices" button to create:
-- MacBook Pro 14" (Apple)
-- iPad Pro 11" (Apple)
-- iPhone 13 (Apple)
-- Dell Latitude 5420 (Dell)
-- Samsung Galaxy Tab S8 (Samsung)
+- All endpoints require admin authentication
+- JWT token validation on every request
+- Permission checks for all operations
+- Audit logs for create/update/delete operations
+- Cannot delete classrooms with assigned devices
+- Cannot delete devices with active loans
+
+---
 
 ## Troubleshooting
 
 ### "No token provided" Error
 **Solution:** Log in at `/login` first.
 
-### "Could not embed because more than one relationship was found"
-**Solution:** Run migration `010_fix_duplicate_foreign_key.sql` to remove the duplicate foreign key.
+### "Classroom has assigned devices" Error
+**Solution:** Remove all device assignments before deleting the classroom.
 
-### Empty Device List
-**Solution:** Use the seed endpoint or manually create devices.
+### "Device already assigned" Error
+**Solution:** A device can only be assigned to one classroom at a time. Remove the existing assignment first.
+
+### "Devices must be in same classroom" Error
+**Solution:** Both devices must be assigned to the same classroom before creating a combination.
+
+### Memory fields not showing
+**Solution:** Memory fields only appear for Laptops, Tablets, and Smartphones categories.
+
+---
 
 ## Performance Optimizations
 
-1. **Simplified Queries** - After removing duplicate FK, queries are cleaner
-2. **Type-Safe Helpers** - `getDeviceData()` provides type safety without `as any`
-3. **Client-Side Filtering** - Status and category filters applied in JavaScript for flexibility
-4. **Indexed Columns** - Brand, model, and tool_instance_id are indexed
+1. **Indexed Columns** - Classroom status, location, and assignment foreign keys are indexed
+2. **Soft Deletes** - Assignments use `is_active` flag to preserve history
+3. **Pagination** - Large lists are paginated
+4. **Client-Side Filtering** - Quick filters applied in JavaScript
+5. **Lazy Loading** - Assignment history loaded on demand
 
-## Security
-
-- All endpoints require admin authentication
-- JWT token validation on every request
-- Cannot delete devices with active loans
-- Audit logs for all CRUD operations
+---
 
 ## Future Enhancements
 
-- [ ] Bulk import from CSV
-- [ ] Device history tracking
-- [ ] Maintenance scheduling
-- [ ] Photo uploads
-- [ ] Warranty tracking
-- [ ] Purchase order integration
+- [ ] Bulk device assignment
+- [ ] Device transfer between classrooms
+- [ ] Maintenance scheduling per classroom
+- [ ] Equipment value tracking
+- [ ] PDF report export
+- [ ] Email notifications for assignments
+- [ ] QR code scanning for quick assignment

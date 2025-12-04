@@ -1,13 +1,21 @@
 // Phase 2, Task 5: ConsumableActions component (user role)
 
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { ShoppingCart } from 'lucide-react'
 import { ConsumableItem } from '@/types/consumables'
+import { isCableUnit } from '@/utils/cableDetection'
+import { CableMeasurementCalculator } from './CableMeasurementCalculator'
+
+interface CableCalculationResult {
+  startMarker: number
+  endMarker: number
+  length: number
+}
 
 interface ConsumableActionsProps {
   item: ConsumableItem
-  onRequest: (quantity: number) => void
-  onAddToCart: (quantity: number) => void
+  onRequest: (quantity: number, markers?: { startMarker: number; endMarker: number }) => void
+  onAddToCart: (quantity: number, markers?: { startMarker: number; endMarker: number }) => void
   isRequesting: boolean
 }
 
@@ -18,7 +26,14 @@ export const ConsumableActions: React.FC<ConsumableActionsProps> = ({
   isRequesting,
 }) => {
   const [quantity, setQuantity] = useState<number | ''>(1)
+  const [cableResult, setCableResult] = useState<CableCalculationResult | null>(null)
   const currentStock = item.stock?.current_quantity || 0
+  const unitOfMeasure = item.stock?.unit_of_measure || 'units'
+  const isCable = isCableUnit(unitOfMeasure)
+
+  const handleCableCalculation = useCallback((result: CableCalculationResult) => {
+    setCableResult(result)
+  }, [])
 
   const handleQuantityChange = (value: string) => {
     if (value === '') {
@@ -46,21 +61,70 @@ export const ConsumableActions: React.FC<ConsumableActionsProps> = ({
   }
 
   const handleRequest = () => {
-    const finalQuantity = quantity === '' ? 1 : quantity
-    if (finalQuantity > 0) {
-      onRequest(finalQuantity)
-      setQuantity(1)
+    if (isCable) {
+      if (cableResult && cableResult.length > 0) {
+        onRequest(cableResult.length, { startMarker: cableResult.startMarker, endMarker: cableResult.endMarker })
+        setCableResult(null)
+      }
+    } else {
+      const finalQuantity = quantity === '' ? 1 : quantity
+      if (finalQuantity > 0) {
+        onRequest(finalQuantity)
+        setQuantity(1)
+      }
     }
   }
 
   const handleAddToCart = () => {
-    const finalQuantity = quantity === '' ? 1 : quantity
-    if (finalQuantity > 0) {
-      onAddToCart(finalQuantity)
-      setQuantity(1)
+    if (isCable) {
+      if (cableResult && cableResult.length > 0) {
+        onAddToCart(cableResult.length, { startMarker: cableResult.startMarker, endMarker: cableResult.endMarker })
+        setCableResult(null)
+      }
+    } else {
+      const finalQuantity = quantity === '' ? 1 : quantity
+      if (finalQuantity > 0) {
+        onAddToCart(finalQuantity)
+        setQuantity(1)
+      }
     }
   }
 
+  // Render cable calculator for meters/feet units
+  if (isCable) {
+    return (
+      <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
+        <CableMeasurementCalculator
+          mode="consumption"
+          unitOfMeasure={unitOfMeasure}
+          maxAvailableLength={currentStock}
+          onValidChange={handleCableCalculation}
+        />
+
+        {/* Action Buttons for Cable */}
+        <div className="space-y-2">
+          <button
+            onClick={handleAddToCart}
+            disabled={!cableResult || cableResult.length <= 0}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>Agregar al Carrito</span>
+          </button>
+
+          <button
+            onClick={handleRequest}
+            disabled={isRequesting || !cableResult || cableResult.length <= 0}
+            className="w-full claro-button-primary text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRequesting ? 'Requesting...' : 'Solicitar Ahora'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Standard quantity selector for non-cable items
   return (
     <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
       {/* Quick Quantity Buttons */}
@@ -116,7 +180,7 @@ export const ConsumableActions: React.FC<ConsumableActionsProps> = ({
 
       {/* Stock Info */}
       <div className="text-center text-xs text-gray-500 dark:text-gray-400">
-        Available: {currentStock} {item.stock?.unit_of_measure || 'units'}
+        Available: {currentStock} {unitOfMeasure}
       </div>
 
       {/* Action Buttons */}

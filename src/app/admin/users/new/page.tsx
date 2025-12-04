@@ -19,6 +19,7 @@ export default function NewUserPage() {
     password: '',
     confirmPassword: '',
     email: '',
+    full_name: '',
     role: 'user',
   })
 
@@ -46,6 +47,7 @@ export default function NewUserPage() {
           username: formData.username,
           password: formData.password,
           email: formData.email || undefined,
+          full_name: formData.full_name,
           role: formData.role,
         }),
       })
@@ -117,9 +119,19 @@ export default function NewUserPage() {
                   placeholder="username"
                   required
                 />
-                <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
-                  This will be used as the display name
-                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-text-light dark:text-text-dark">
+                  Full Name *
+                </label>
+                <Input
+                  type="text"
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                  placeholder="John Doe"
+                  required
+                />
               </div>
 
               <div>
@@ -183,7 +195,7 @@ export default function NewUserPage() {
               <div className="flex space-x-4 pt-4">
                 <Button
                   type="submit"
-                  disabled={isSubmitting || !formData.username || !formData.password}
+                  disabled={isSubmitting || !formData.username || !formData.full_name || !formData.password}
                   className="flex-1"
                 >
                   {isSubmitting ? 'Creating...' : 'Create User'}

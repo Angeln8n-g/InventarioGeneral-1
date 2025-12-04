@@ -8,9 +8,28 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('⚠️ Supabase configuration missing. Some features may not work.')
 }
 
+// Create Supabase client with proper configuration
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: {
+      fetch: (url, options = {}) => {
+        // Add timeout to prevent hanging requests
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+        
+        return fetch(url, {
+          ...options,
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeoutId))
+      },
+    },
+  }
 )
 
 export type Database = {

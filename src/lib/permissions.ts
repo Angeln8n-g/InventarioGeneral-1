@@ -36,6 +36,7 @@ export const PERMISSIONS = {
   ADMIN_MANAGE_TOOLS: 'admin:manage_tools',
   ADMIN_MANAGE_CONSUMABLES: 'admin:manage_consumables',
   ADMIN_MANAGE_LOANS: 'admin:manage_loans',
+  ADMIN_MANAGE_CATEGORIES: 'admin:manage_categories',
   
   // User management
   USERS_VIEW_OWN: 'users:view_own',
@@ -140,6 +141,7 @@ export const ROLE_PERMISSIONS: Record<User['role'], Permission[]> = {
     PERMISSIONS.ADMIN_MANAGE_TOOLS,
     PERMISSIONS.ADMIN_MANAGE_CONSUMABLES,
     PERMISSIONS.ADMIN_MANAGE_LOANS,
+    PERMISSIONS.ADMIN_MANAGE_CATEGORIES,
   ],
 }
 
@@ -232,6 +234,10 @@ export function canGenerateReports(user: PermissionUser): boolean {
 
 export function canConfigureSystem(user: PermissionUser): boolean {
   return hasPermission(user, PERMISSIONS.SYSTEM_CONFIGURE)
+}
+
+export function canManageCategories(user: PermissionUser): boolean {
+  return hasPermission(user, PERMISSIONS.ADMIN_MANAGE_CATEGORIES)
 }
 
 // Permission middleware for API routes

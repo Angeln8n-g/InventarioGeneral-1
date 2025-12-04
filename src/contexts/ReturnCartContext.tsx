@@ -11,13 +11,16 @@ export interface ReturnCartItem {
   max_returnable: number
   unit_of_measure?: string
   consumable_stock_id: number
+  segment_start?: number
+  segment_end?: number
+  unique_key: string
 }
 
 interface ReturnCartContextType {
   items: ReturnCartItem[]
-  addItem: (item: Omit<ReturnCartItem, 'quantity'>, quantity: number) => void
-  removeItem: (id: number) => void
-  updateQuantity: (id: number, quantity: number) => void
+  addItem: (item: Omit<ReturnCartItem, 'quantity' | 'unique_key'>, quantity: number) => void
+  removeItem: (uniqueKey: string) => void
+  updateQuantity: (uniqueKey: string, quantity: number) => void
   clearCart: () => void
   totalItems: number
   totalQuantity: number
@@ -52,12 +55,14 @@ export function ReturnCartProvider({ children }: { children: React.ReactNode }) 
     }
   }, [items])
 
-  const addItem = useCallback((item: Omit<ReturnCartItem, 'quantity'>, quantity: number) => {
+  const addItem = useCallback((item: Omit<ReturnCartItem, 'quantity' | 'unique_key'>, quantity: number) => {
     setItems((prevItems) => {
+      const baseKey = `${item.id}-${item.consumption_date}-${item.consumable_stock_id}`
+      const unique_key = (item.segment_start !== undefined && item.segment_end !== undefined)
+        ? `${baseKey}-${item.segment_start}-${item.segment_end}`
+        : baseKey
       // Check if item already exists
-      const existingIndex = prevItems.findIndex(
-        (i) => i.id === item.id && i.consumption_date === item.consumption_date
-      )
+      const existingIndex = prevItems.findIndex((i) => i.unique_key === unique_key)
 
       if (existingIndex >= 0) {
         // Update quantity, but don't exceed max_returnable
@@ -75,18 +80,18 @@ export function ReturnCartProvider({ children }: { children: React.ReactNode }) 
 
       // Add new item
       const validQuantity = Math.min(quantity, item.max_returnable)
-      return [...prevItems, { ...item, quantity: validQuantity }]
+      return [...prevItems, { ...item, quantity: validQuantity, unique_key }]
     })
   }, [])
 
-  const removeItem = useCallback((id: number) => {
-    setItems((prevItems) => prevItems.filter((item) => item.id !== id))
+  const removeItem = useCallback((uniqueKey: string) => {
+    setItems((prevItems) => prevItems.filter((item) => item.unique_key !== uniqueKey))
   }, [])
 
-  const updateQuantity = useCallback((id: number, quantity: number) => {
+  const updateQuantity = useCallback((uniqueKey: string, quantity: number) => {
     setItems((prevItems) => {
       const newItems = [...prevItems]
-      const index = newItems.findIndex((item) => item.id === id)
+      const index = newItems.findIndex((item) => item.unique_key === uniqueKey)
       
       if (index >= 0) {
         const validQuantity = Math.max(1, Math.min(quantity, newItems[index].max_returnable))

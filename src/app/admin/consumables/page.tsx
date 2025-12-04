@@ -42,6 +42,13 @@ function AdminConsumablesContent() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletingConsumableId, setDeletingConsumableId] = useState<number | null>(null)
+  const [deletingConsumableName, setDeletingConsumableName] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   // Use shared filters hook
   const { filters, setFilters, filteredItems, categories, clearFilters, hasActiveFilters } =
     useConsumableFilters<ConsumableStockAdmin>(stocks)
@@ -289,6 +296,48 @@ function AdminConsumablesContent() {
     }
   }
 
+  const handleDelete = (stockId: number) => {
+    const consumable = stocks.find(s => s.id === stockId)
+    if (!consumable) return
+
+    setDeletingConsumableId(stockId)
+    setDeletingConsumableName(consumable.item_type.name)
+    setDeleteError(null)
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteConsumable = async () => {
+    if (!deletingConsumableId) return
+
+    setIsDeleting(true)
+    setDeleteError(null)
+
+    try {
+      const response = await fetch(`/api/admin/consumables/${deletingConsumableId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      })
+
+      if (response.ok) {
+        toastSuccess('Consumable deleted successfully!')
+        setShowDeleteModal(false)
+        setDeletingConsumableId(null)
+        fetchData()
+      } else {
+        const errorData = await response.json()
+        setDeleteError(errorData.error?.message || 'Failed to delete consumable')
+      }
+    } catch (error: unknown) {
+      console.error('Error deleting consumable:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      setDeleteError(`An error occurred: ${errorMessage}`)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <ProtectedRoute>
@@ -386,7 +435,9 @@ function AdminConsumablesContent() {
                 onViewDetails={handleViewDetails}
                 onEdit={handleEdit}
                 onUploadImage={handleUploadImage}
+                onDelete={handleDelete}
                 adjustingStockId={adjustingStockId}
+                deletingStockId={isDeleting ? deletingConsumableId : null}
                 isLoading={isLoadingData}
                 onClearFilters={hasActiveFilters ? clearFilters : undefined}
               />
@@ -604,6 +655,75 @@ function AdminConsumablesContent() {
                     >
                       {isUploading ? 'Uploading...' : 'Upload Image'}
                     </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Confirmation Modal */}
+          {showDeleteModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-card-light dark:bg-card-dark rounded-lg shadow-xl max-w-md w-full p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">Delete Consumable</h3>
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    className="text-text-secondary-light dark:text-text-secondary-dark hover:text-text-light dark:hover:text-text-dark"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center">
+                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                      <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-text-light dark:text-text-dark mb-2">
+                      Are you sure you want to delete
+                    </p>
+                    <p className="font-semibold text-lg text-text-light dark:text-text-dark">
+                      "{deletingConsumableName}"?
+                    </p>
+                    <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-2">
+                      This action cannot be undone. All stock movements and history for this item will also be deleted.
+                    </p>
+                  </div>
+
+                  {deleteError && (
+                    <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-accent rounded-lg">
+                      <p className="text-sm text-red-accent">{deleteError}</p>
+                    </div>
+                  )}
+
+                  <div className="flex space-x-3 pt-2">
+                    <Button
+                      onClick={() => {
+                        setShowDeleteModal(false)
+                        setDeletingConsumableId(null)
+                        setDeleteError(null)
+                      }}
+                      variant="secondary"
+                      className="flex-1"
+                      disabled={isDeleting}
+                    >
+                      Cancel
+                    </Button>
+                    <button
+                      onClick={handleDeleteConsumable}
+                      disabled={isDeleting}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete'}
+                    </button>
                   </div>
                 </div>
               </div>

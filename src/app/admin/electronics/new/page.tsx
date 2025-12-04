@@ -9,6 +9,7 @@ import { loadFromStorage } from '@/features/auth/authSlice'
 import { ElectronicDeviceForm } from '@/components/electronics'
 import { CreateElectronicDeviceInput, UpdateElectronicDeviceInput } from '@/types/database'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { toastSuccess, toastError } from '@/lib/toast'
 
 export default function NewElectronicDevicePage() {
   const router = useRouter()
@@ -45,13 +46,13 @@ export default function NewElectronicDevicePage() {
       const result = await response.json()
       
       // Show success message
-      alert('Device created successfully!')
+      toastSuccess('Dispositivo creado', 'El dispositivo ha sido creado exitosamente')
       
       // Redirect to devices list
       router.push('/admin/electronics')
     } catch (error) {
       console.error('Error creating device:', error)
-      alert(error instanceof Error ? error.message : 'Failed to create device')
+      toastError('Error al crear dispositivo', error instanceof Error ? error.message : 'Failed to create device')
     } finally {
       setIsSubmitting(false)
     }

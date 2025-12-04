@@ -8,6 +8,13 @@ import type {
   Notification 
 } from '@/types/database'
 import type { NotificationPreferences, NotificationFilter } from '@/types/notifications'
+import type { 
+  DashboardSummary, 
+  UserConsumption, 
+  DeviceMovement, 
+  UnifiedAlert,
+  GlobalFilters 
+} from '@/types/unified-dashboard'
 
 // Additional types for new mutations
 interface BatchLoanRequest {
@@ -33,6 +40,8 @@ interface ConsumeConsumableRequest {
   qr_code: string
   quantity: number
   notes?: string
+  start_marker?: number
+  end_marker?: number
 }
 
 interface ConsumeConsumableResponse {
@@ -56,6 +65,8 @@ interface ReturnConsumableRequest {
     returned_quantity: number
     consumption_date: string
     notes?: string
+    segment_start?: number
+    segment_end?: number
   }>
 }
 
@@ -539,6 +550,422 @@ export const api = createApi({
       query: () => '/admin/statistics/alerts',
       keepUnusedDataFor: 60, // 1 minute - frequently updated
     }),
+
+    // ========================================================================
+    // Unified Dashboard Endpoints
+    // ========================================================================
+
+    /**
+     * Get unified dashboard summary with all major KPIs
+     */
+    getUnifiedDashboardSummary: builder.query<
+      { data: DashboardSummary },
+      { filters?: GlobalFilters }
+    >({
+      query: ({ filters }) => ({
+        url: '/admin/unified-dashboard/summary',
+        params: {
+          dateRangeType: filters?.dateRange?.type,
+          startDate: filters?.dateRange?.start,
+          endDate: filters?.dateRange?.end,
+          category: filters?.category,
+        },
+      }),
+      keepUnusedDataFor: 120, // 2 minutes
+    }),
+
+    /**
+     * Get user consumption data for the unified dashboard
+     */
+    getUserConsumption: builder.query<
+      { data: UserConsumption[]; total: number },
+      { 
+        filters?: GlobalFilters
+        sortBy?: 'quantity' | 'cost' | 'name'
+        sortDirection?: 'asc' | 'desc'
+        page?: number
+        limit?: number
+      }
+    >({
+      query: ({ filters, sortBy, sortDirection, page, limit }) => ({
+        url: '/admin/unified-dashboard/user-consumption',
+        params: {
+          dateRangeType: filters?.dateRange?.type,
+          startDate: filters?.dateRange?.start,
+          endDate: filters?.dateRange?.end,
+          category: filters?.category,
+          sortBy,
+          sortDirection,
+          page,
+          limit,
+        },
+      }),
+      keepUnusedDataFor: 180,
+    }),
+
+    /**
+     * Get device movements/transfers history
+     */
+    getDeviceMovements: builder.query<
+      { data: DeviceMovement[]; total: number },
+      {
+        filters?: GlobalFilters
+        classroomId?: number
+        deviceId?: number
+        page?: number
+        limit?: number
+      }
+    >({
+      query: ({ filters, classroomId, deviceId, page, limit }) => ({
+        url: '/admin/unified-dashboard/device-movements',
+        params: {
+          dateRangeType: filters?.dateRange?.type,
+          startDate: filters?.dateRange?.start,
+          endDate: filters?.dateRange?.end,
+          classroomId,
+          deviceId,
+          page,
+          limit,
+        },
+      }),
+      keepUnusedDataFor: 180,
+    }),
+
+    /**
+     * Get dashboard alerts (low stock, overdue loans, etc.)
+     */
+    getDashboardAlerts: builder.query<
+      { data: UnifiedAlert[]; total: number },
+      { filters?: GlobalFilters }
+    >({
+      query: ({ filters }) => ({
+        url: '/admin/unified-dashboard/alerts',
+        params: {
+          dateRangeType: filters?.dateRange?.type,
+          startDate: filters?.dateRange?.start,
+          endDate: filters?.dateRange?.end,
+          category: filters?.category,
+        },
+      }),
+      keepUnusedDataFor: 60, // 1 minute - alerts need to be fresh
+    }),
+
+    /**
+     * Get all classrooms with device assignments
+     */
+    getClassrooms: builder.query<
+      { 
+        data: Array<{
+          id: number
+          name: string
+          building?: string
+          floor?: string
+          capacity?: number
+          device_count?: number
+        }>
+        total: number 
+      },
+      void
+    >({
+      query: () => '/admin/classrooms',
+      keepUnusedDataFor: 300,
+    }),
+
+    /**
+     * Get all electronic devices with summary
+     */
+    getElectronics: builder.query<
+      { 
+        data: Array<{
+          id: number
+          brand: string
+          model: string
+          serial_number: string
+          tool_instance: {
+            id: number
+            qr_code: string
+            status: string
+            item_type: {
+              id: number
+              name: string
+              category?: string
+            }
+          }
+          classroom_assignment?: {
+            classroom: {
+              id: number
+              name: string
+            }
+          }
+        }>
+        total: number
+        summary: {
+          by_status: Record<string, number>
+          by_category: Record<string, number>
+          total_devices: number
+        }
+      },
+      void
+    >({
+      query: () => '/admin/electronics',
+      keepUnusedDataFor: 180,
+    }),
+
+    /**
+     * Get device assignments for classrooms
+     */
+    getDeviceAssignments: builder.query<
+      { 
+        success: boolean
+        data: Array<{
+          id: number
+          classroom_id: number
+          electronic_device_id: number
+          assigned_date: string
+          classroom: {
+            id: number
+            name: string
+            building?: string
+            floor?: string
+          }
+          electronic_device: {
+            id: number
+            brand: string
+            model: string
+            serial_number: string
+          }
+        }>
+        count: number 
+      },
+      void
+    >({
+      query: () => '/admin/device-assignments',
+      keepUnusedDataFor: 180,
+    }),
+
+    /**
+     * Get device combinations
+     */
+    getDeviceCombinations: builder.query<
+      { 
+        success: boolean
+        data: Array<{
+          id: number
+          device_1_id: number
+          device_2_id: number
+          combination_type: string
+          notes?: string
+          created_at: string
+          created_by: number
+          device_1?: {
+            id: number
+            brand: string
+            model: string
+            tool_instance?: {
+              item_type?: {
+                name: string
+              }
+            }
+          }
+          device_2?: {
+            id: number
+            brand: string
+            model: string
+            tool_instance?: {
+              item_type?: {
+                name: string
+              }
+            }
+          }
+          classroom?: {
+            id: number
+            name: string
+          }
+          creator?: {
+            id: number
+            username: string
+          }
+        }>
+        count: number 
+      },
+      void
+    >({
+      query: () => '/admin/device-combinations',
+      keepUnusedDataFor: 180,
+    }),
+
+    // ========================================================================
+    // Maintenance Reports Endpoints
+    // ========================================================================
+
+    /**
+     * Get maintenance reports
+     */
+    getMaintenanceReports: builder.query<
+      {
+        success: boolean
+        data: Array<{
+          id: number
+          deviceId: number
+          deviceName: string
+          brand: string
+          model: string
+          serialNumber: string
+          issueDescription: string
+          technicianType: 'internal' | 'external'
+          technicianName: string
+          technicianCompany?: string
+          status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+          reportDate: string
+          resolutionDate?: string
+          resolutionNotes?: string
+          cost?: number
+          createdBy: string
+        }>
+        total: number
+        page: number
+        limit: number
+      },
+      { status?: string; deviceId?: number; page?: number; limit?: number } | void
+    >({
+      query: (params) => {
+        const searchParams = new URLSearchParams()
+        if (params?.status) searchParams.append('status', params.status)
+        if (params?.deviceId) searchParams.append('deviceId', params.deviceId.toString())
+        if (params?.page) searchParams.append('page', params.page.toString())
+        if (params?.limit) searchParams.append('limit', params.limit.toString())
+        return `/admin/maintenance-reports?${searchParams.toString()}`
+      },
+      providesTags: ['Tool'],
+      keepUnusedDataFor: 120,
+    }),
+
+    /**
+     * Create a new maintenance report
+     */
+    createMaintenanceReport: builder.mutation<
+      {
+        success: boolean
+        data: {
+          id: number
+          deviceId: number
+          deviceName: string
+          brand: string
+          issueDescription: string
+          technicianType: string
+          technicianName: string
+          status: string
+          reportDate: string
+        }
+        message: string
+      },
+      {
+        deviceId: string
+        issueDescription: string
+        technicianType: 'internal' | 'external'
+        technicianName: string
+        technicianCompany?: string
+      }
+    >({
+      query: (reportData) => ({
+        url: '/admin/maintenance-reports',
+        method: 'POST',
+        body: reportData,
+      }),
+      invalidatesTags: ['Tool'],
+    }),
+
+    /**
+     * Update maintenance report status
+     */
+    updateMaintenanceReport: builder.mutation<
+      {
+        success: boolean
+        data: unknown
+        message: string
+      },
+      {
+        id: number
+        status?: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+        resolutionNotes?: string
+        cost?: number
+      }
+    >({
+      query: (updateData) => ({
+        url: '/admin/maintenance-reports',
+        method: 'PATCH',
+        body: updateData,
+      }),
+      invalidatesTags: ['Tool'],
+    }),
+
+    // ========================================================================
+    // Device Movements Endpoints
+    // ========================================================================
+
+    /**
+     * Get device movement history
+     */
+    getDeviceMovementHistory: builder.query<
+      {
+        success: boolean
+        data: Array<{
+          id: number
+          deviceId: number
+          deviceName: string
+          serialNumber: string
+          brand: string
+          model: string
+          fromClassroom: { id: number; name: string; building?: string } | null
+          toClassroom: { id: number; name: string; building?: string } | null
+          movedAt: string
+          movedBy: { id: number; username: string } | null
+          reason: string | null
+          notes: string | null
+        }>
+        total: number
+        page: number
+        limit: number
+      },
+      { deviceId?: number; classroomId?: number; page?: number; limit?: number } | void
+    >({
+      query: (params) => {
+        const searchParams = new URLSearchParams()
+        if (params?.deviceId) searchParams.append('deviceId', params.deviceId.toString())
+        if (params?.classroomId) searchParams.append('classroomId', params.classroomId.toString())
+        if (params?.page) searchParams.append('page', params.page.toString())
+        if (params?.limit) searchParams.append('limit', params.limit.toString())
+        return `/admin/device-movements?${searchParams.toString()}`
+      },
+      providesTags: ['Tool'],
+      keepUnusedDataFor: 120,
+    }),
+
+    /**
+     * Create a new device movement record
+     */
+    createDeviceMovement: builder.mutation<
+      {
+        success: boolean
+        data: unknown
+        message: string
+      },
+      {
+        deviceId: number
+        fromClassroomId?: number
+        toClassroomId?: number
+        reason?: string
+        notes?: string
+        movedBy?: number
+      }
+    >({
+      query: (movementData) => ({
+        url: '/admin/device-movements',
+        method: 'POST',
+        body: movementData,
+      }),
+      invalidatesTags: ['Tool'],
+    }),
   }),
 })
 
@@ -575,4 +1002,21 @@ export const {
   useGetTopUsersStatisticsQuery,
   useGetCostsStatisticsQuery,
   useGetAlertsStatisticsQuery,
+  // Unified Dashboard
+  useGetUnifiedDashboardSummaryQuery,
+  useGetUserConsumptionQuery,
+  useGetDeviceMovementsQuery,
+  useGetDashboardAlertsQuery,
+  // Classrooms and Electronics
+  useGetClassroomsQuery,
+  useGetElectronicsQuery,
+  useGetDeviceAssignmentsQuery,
+  useGetDeviceCombinationsQuery,
+  // Maintenance Reports
+  useGetMaintenanceReportsQuery,
+  useCreateMaintenanceReportMutation,
+  useUpdateMaintenanceReportMutation,
+  // Device Movements
+  useGetDeviceMovementHistoryQuery,
+  useCreateDeviceMovementMutation,
 } = api

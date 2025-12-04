@@ -5,17 +5,24 @@ import { ConsumableItem, ConsumableStockAdmin, UserRole, StockAdjustmentAction }
 import { ConsumableCard } from './ConsumableCard'
 import { useReservations } from '@/hooks/useReservations'
 
+interface CableMarkers {
+  startMarker: number
+  endMarker: number
+}
+
 interface ConsumableListProps {
   items: ConsumableItem[] | ConsumableStockAdmin[]
   role: UserRole
-  onRequest?: (itemId: number, quantity: number) => void
-  onAddToCart?: (item: ConsumableItem, quantity: number) => void
+  onRequest?: (itemId: number, quantity: number, markers?: CableMarkers) => void
+  onAddToCart?: (item: ConsumableItem, quantity: number, markers?: CableMarkers) => void
   onAdjustStock?: (stockId: number, action: StockAdjustmentAction, quantity: number) => void
   onViewDetails?: (stockId: number) => void
   onEdit?: (stockId: number) => void
   onUploadImage?: (stockId: number) => void
+  onDelete?: (stockId: number) => void
   requestingItemId?: number | null
   adjustingStockId?: number | null
+  deletingStockId?: number | null
   isLoading?: boolean
   onClearFilters?: () => void
 }
@@ -29,8 +36,10 @@ export const ConsumableList: React.FC<ConsumableListProps> = ({
   onViewDetails,
   onEdit,
   onUploadImage,
+  onDelete,
   requestingItemId,
   adjustingStockId,
+  deletingStockId,
   isLoading = false,
   onClearFilters,
 }) => {
@@ -82,6 +91,7 @@ export const ConsumableList: React.FC<ConsumableListProps> = ({
         const uniqueKey = 'item_type' in item ? `stock-${item.id}` : `item-${item.id}-${index}`
         const isRequesting = requestingItemId === itemId
         const isAdjusting = adjustingStockId === itemId
+        const isDeleting = deletingStockId === itemId
 
         const reservationsForItem = getReservationsForItem(itemId)
         const totalReserved = getTotalReservedForItem(itemId)
@@ -95,14 +105,16 @@ export const ConsumableList: React.FC<ConsumableListProps> = ({
             key={uniqueKey}
             item={item}
             role={role}
-            onRequest={onRequest ? (quantity) => onRequest(itemId, quantity) : undefined}
-            onAddToCart={onAddToCart ? (quantity) => onAddToCart(item as ConsumableItem, quantity) : undefined}
+            onRequest={onRequest ? (quantity, markers) => onRequest(itemId, quantity, markers) : undefined}
+            onAddToCart={onAddToCart ? (quantity, markers) => onAddToCart(item as ConsumableItem, quantity, markers) : undefined}
             onAdjustStock={onAdjustStock ? (action, quantity) => onAdjustStock(itemId, action, quantity) : undefined}
             onViewDetails={onViewDetails ? () => onViewDetails(itemId) : undefined}
             onEdit={onEdit ? () => onEdit(itemId) : undefined}
             onUploadImage={onUploadImage ? () => onUploadImage(itemId) : undefined}
+            onDelete={onDelete ? () => onDelete(itemId) : undefined}
             isRequesting={isRequesting}
             isAdjusting={isAdjusting}
+            isDeleting={isDeleting}
             reservedQuantity={totalReserved}
             activeReservations={activeReservations}
           />

@@ -76,6 +76,43 @@ export interface ConsumableRequest {
   item_type?: ItemType
 }
 
+export interface StockMovement {
+  id: number
+  consumable_stock_id: number
+  movement_type: 'consumption' | 'adjustment' | 'restock' | 'loss' | 'damage' | 'return'
+  quantity: number
+  user_id: number | null
+  notes: string | null
+  created_at: string
+  // Cable marker fields (for cable-type consumables)
+  start_marker: number | null
+  end_marker: number | null
+  // Relations
+  user?: User
+  consumable_stock?: ConsumableStock
+}
+
+export interface ConsumableReturn {
+  id: number
+  user_id: number
+  item_type_id: number
+  consumable_stock_id: number
+  returned_quantity: number
+  original_consumption_date: string
+  return_date: string
+  notes: string | null
+  status: 'completed' | 'cancelled'
+  created_at: string
+  updated_at: string
+  // Cable segment fields (for cable-type consumables)
+  segment_start: number | null
+  segment_end: number | null
+  // Relations
+  user?: User
+  item_type?: ItemType
+  consumable_stock?: ConsumableStock
+}
+
 export interface Notification {
   id: number
   user_id: number
@@ -108,12 +145,14 @@ export interface CreateUserInput {
   username: string
   email: string
   password_hash: string
+  full_name: string
   role?: 'user' | 'admin'
 }
 
 export interface UpdateUserInput {
   username?: string
   email?: string
+  full_name?: string
   role?: 'user' | 'admin'
 }
 
@@ -199,6 +238,46 @@ export interface CreateAuditLogInput {
   new_values?: Record<string, unknown> | null
   ip_address?: string
   user_agent?: string
+}
+
+// Stock Movement Input types
+export interface CreateStockMovementInput {
+  consumable_stock_id: number
+  movement_type: StockMovement['movement_type']
+  quantity: number
+  user_id?: number
+  notes?: string
+  // Cable marker fields (optional, for cable-type consumables)
+  start_marker?: number
+  end_marker?: number
+}
+
+export interface UpdateStockMovementInput {
+  quantity?: number
+  notes?: string
+  start_marker?: number
+  end_marker?: number
+}
+
+// Consumable Return Input types
+export interface CreateConsumableReturnInput {
+  user_id: number
+  item_type_id: number
+  consumable_stock_id: number
+  returned_quantity: number
+  original_consumption_date: string
+  notes?: string
+  // Cable segment fields (optional, for cable-type consumables)
+  segment_start?: number
+  segment_end?: number
+}
+
+export interface UpdateConsumableReturnInput {
+  returned_quantity?: number
+  notes?: string
+  status?: ConsumableReturn['status']
+  segment_start?: number
+  segment_end?: number
 }
 
 // API Response types
@@ -358,6 +437,192 @@ export interface RequiredQRResponse {
   data: RequiredQRInfo
 }
 
+// Cable Marker types for API requests/responses
+export interface ConsumeWithMarkersRequest {
+  qr_code: string
+  start_marker: number
+  end_marker: number
+  notes?: string
+}
+
+export interface ReturnWithMarkersRequest {
+  returns: Array<{
+    item_type_id: number
+    consumption_date: string
+    segment_start: number
+    segment_end: number
+    notes?: string
+  }>
+}
+
+export interface CableSegment {
+  segment_start: number
+  segment_end: number
+  return_date: string
+  returned_quantity: number
+}
+
+export interface ConsumptionItemWithMarkers {
+  item_type_id: number
+  consumable_stock_id: number
+  item_name: string
+  item_description?: string
+  consumed_quantity: number
+  returned_quantity: number
+  returnable_quantity: number
+  unit_of_measure: string
+  // Cable marker fields
+  start_marker: number | null
+  end_marker: number | null
+  returned_segments: CableSegment[]
+}
+
+export interface ConsumptionHistoryWithMarkers {
+  consumption_date: string
+  items: ConsumptionItemWithMarkers[]
+  total_items: number
+  total_consumed: number
+  total_returnable: number
+}
+
+export interface MyConsumptionsWithMarkersResponse {
+  data: ConsumptionHistoryWithMarkers[]
+  total_dates: number
+}
+
+// Cable validation types
+export interface MarkerValidationResult {
+  isValid: boolean
+  errors: string[]
+  warnings: string[]
+}
+
+export interface SegmentOverlapResult {
+  isValid: boolean
+  overlappingSegments: CableSegment[]
+}
+
+// Device Category types (Dynamic Categories)
+export interface DeviceCategory {
+  id: number
+  name: string
+  description?: string
+  icon?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  version: number
+}
+
+export interface DeviceCategoryWithCount extends DeviceCategory {
+  device_count: number
+}
+
+export interface CreateDeviceCategoryInput {
+  name: string
+  description?: string
+  icon?: string
+}
+
+export interface UpdateDeviceCategoryInput {
+  name?: string
+  description?: string
+  icon?: string
+  is_active?: boolean
+}
+
+// Category Field types
+export interface CategoryField {
+  id: number
+  category_id: number
+  field_name: string
+  field_type: 'text' | 'number' | 'select' | 'boolean'
+  is_required: boolean
+  is_custom: boolean
+  display_order: number
+  options?: Record<string, unknown>
+  validation_rules?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateCategoryFieldInput {
+  category_id: number
+  field_name: string
+  field_type: 'text' | 'number' | 'select' | 'boolean'
+  is_required?: boolean
+  is_custom?: boolean
+  display_order?: number
+  options?: Record<string, unknown>
+  validation_rules?: Record<string, unknown>
+}
+
+export interface UpdateCategoryFieldInput {
+  field_name?: string
+  field_type?: 'text' | 'number' | 'select' | 'boolean'
+  is_required?: boolean
+  display_order?: number
+  options?: Record<string, unknown>
+  validation_rules?: Record<string, unknown>
+}
+
+// Device Custom Field types
+export interface DeviceCustomField {
+  id: number
+  electronic_device_id: number
+  field_id: number
+  field_value: unknown
+  created_at: string
+  updated_at: string
+}
+
+export interface DeviceCustomFieldWithDetails extends DeviceCustomField {
+  field: CategoryField
+}
+
+export interface CreateDeviceCustomFieldInput {
+  electronic_device_id: number
+  field_id: number
+  field_value: unknown
+}
+
+export interface UpdateDeviceCustomFieldInput {
+  field_value: unknown
+}
+
+// Category Migration types
+export interface MigrationAnalysis {
+  compatibleFields: string[]
+  incompatibleFields: string[]
+  devicesToMigrate: number
+}
+
+export interface MigrationRequest {
+  sourceCategoryId: number
+  targetCategoryId: number
+  deviceIds?: number[]
+  fieldMapping?: Record<string, unknown>
+}
+
+export interface MigrationResult {
+  success: boolean
+  migratedCount: number
+  failedCount: number
+  errors?: string[]
+}
+
+// Validation types
+export interface ValidationError {
+  field: string
+  message: string
+  code: string
+}
+
+export interface ValidationResult {
+  isValid: boolean
+  errors: ValidationError[]
+}
+
 // Electronic Device types
 export type ElectronicCategory = 
   | 'Laptops'
@@ -374,6 +639,9 @@ export interface ElectronicDevice {
   // Basic Information
   brand?: string
   model?: string
+  // Memory Capacity
+  memory_capacity?: number
+  memory_unit?: 'GB' | 'TB'
   
   // Metadata
   created_at: string
@@ -395,6 +663,9 @@ export interface CreateElectronicDeviceInput {
   brand?: string
   model?: string
   serial_number?: string
+  // Memory Capacity
+  memory_capacity?: number
+  memory_unit?: 'GB' | 'TB'
   
   // Status
   status?: ToolInstance['status']
@@ -409,6 +680,9 @@ export interface UpdateElectronicDeviceInput {
   brand?: string
   model?: string
   serial_number?: string
+  // Memory Capacity
+  memory_capacity?: number
+  memory_unit?: 'GB' | 'TB'
   
   // Status
   status?: ToolInstance['status']

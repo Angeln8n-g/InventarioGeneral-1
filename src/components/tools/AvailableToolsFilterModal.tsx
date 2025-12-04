@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { X, Search, Package, Tag } from 'lucide-react'
+import { Search, Package, Tag } from 'lucide-react'
+import { TransitionDialog } from '@/components/ui/TransitionDialog'
 
 interface AvailableTool {
   item_type_id: number
@@ -56,37 +57,17 @@ export const AvailableToolsFilterModal: React.FC<AvailableToolsFilterModalProps>
     })
   }, [tools, selectedCategory, searchTerm])
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-card-light dark:bg-card-dark rounded-lg shadow-xl max-w-5xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 bg-card-light dark:bg-card-dark border-b border-gray-200 dark:border-gray-700 p-3 sm:p-4 flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-2">
-              <h2 className="text-lg sm:text-xl font-semibold text-text-light dark:text-text-dark truncate">
-                Herramientas Disponibles
-              </h2>
-              {(searchTerm || selectedCategory !== 'all') && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary flex-shrink-0">
-                  Filtrado
-                </span>
-              )}
-            </div>
-            <p className="text-xs sm:text-sm text-text-secondary-light dark:text-text-secondary-dark mt-1 truncate">
-              {filteredTools.length} {filteredTools.length === 1 ? 'herramienta' : 'herramientas'}
-              {selectedCategory !== 'all' && ` en ${selectedCategory}`}
-              {tools.length !== filteredTools.length && ` de ${tools.length} totales`}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-text-secondary-light dark:text-text-secondary-dark hover:text-text-light dark:hover:text-text-dark transition-colors flex-shrink-0 ml-2"
-          >
-            <X className="w-5 h-5 sm:w-6 sm:h-6" />
-          </button>
-        </div>
+    <TransitionDialog
+      open={isOpen}
+      onClose={onClose}
+      animationType="auto"
+      speed="fast"
+      enableHaptics={true}
+      className="!max-w-5xl !max-h-[95vh] sm:!max-h-[90vh] flex flex-col"
+      title="Herramientas Disponibles"
+      description={`${filteredTools.length} ${filteredTools.length === 1 ? 'herramienta' : 'herramientas'}${selectedCategory !== 'all' ? ` en ${selectedCategory}` : ''}${tools.length !== filteredTools.length ? ` de ${tools.length} totales` : ''}`}
+    >
 
         {/* Filters */}
         <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700 space-y-2 sm:space-y-3">
@@ -250,7 +231,6 @@ export const AvailableToolsFilterModal: React.FC<AvailableToolsFilterModalProps>
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </TransitionDialog>
   )
 }

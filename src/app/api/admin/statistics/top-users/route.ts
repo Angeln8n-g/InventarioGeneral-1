@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
       if (usersError) throw usersError
 
-      // Get loans per user
+      // Get loans per user (within date range)
       const { data: loans, error: loansError } = await supabase
         .from('loans')
         .select('user_id, status')
@@ -29,6 +29,14 @@ export async function GET(request: NextRequest) {
         .lte('loan_date', end)
 
       if (loansError) throw loansError
+
+      // Also get ALL active loans (regardless of date) to show current active loans
+      const { data: activeLoans, error: activeLoansError } = await supabase
+        .from('loans')
+        .select('user_id')
+        .eq('status', 'active')
+
+      if (activeLoansError) throw activeLoansError
 
       // Get consumables per user
       const { data: consumables, error: consumablesError } = await supabase
@@ -58,9 +66,13 @@ export async function GET(request: NextRequest) {
       loans?.forEach((loan) => {
         if (userStats[loan.user_id]) {
           userStats[loan.user_id].totalLoans++
-          if (loan.status === 'active') {
-            userStats[loan.user_id].activeLoans++
-          }
+        }
+      })
+
+      // Count current active loans per user
+      activeLoans?.forEach((loan) => {
+        if (userStats[loan.user_id]) {
+          userStats[loan.user_id].activeLoans++
         }
       })
 
@@ -70,16 +82,21 @@ export async function GET(request: NextRequest) {
         }
       })
 
-      // Filter and sort
-      let topUsers = Object.values(userStats).filter((user: any) => {
-        if (filterBy === 'loans') return user.totalLoans > 0
-        if (filterBy === 'consumables') return user.totalConsumables > 0
-        return user.totalLoans > 0 || user.totalConsumables > 0
-      })
+      // Filter based on filterBy parameter
+      let topUsers = Object.values(userStats)
+      
+      if (filterBy === 'loans') {
+        // Show users with active loans OR loans in the period
+        topUsers = topUsers.filter((user: any) => user.activeLoans > 0 || user.totalLoans > 0)
+      } else if (filterBy === 'consumables') {
+        topUsers = topUsers.filter((user: any) => user.totalConsumables > 0)
+      }
+      // For 'all' or 'both', include all users
 
+      // Sort by activity score (loans + consumables)
       topUsers.sort((a: any, b: any) => {
-        const scoreA = a.totalLoans + a.totalConsumables
-        const scoreB = b.totalLoans + b.totalConsumables
+        const scoreA = a.totalLoans + a.totalConsumables + a.activeLoans
+        const scoreB = b.totalLoans + b.totalConsumables + b.activeLoans
         return scoreB - scoreA
       })
 
@@ -88,7 +105,19 @@ export async function GET(request: NextRequest) {
         rank: index + 1,
       }))
 
-      return NextResponse.json({ data: topUsers })
+      // Calculate summary stats
+      const totalActiveUsers = Object.values(userStats).filter((u: any) => u.totalLoans > 0 || u.totalConsumables > 0).length
+      const totalLoans = Object.values(userStats).reduce((sum: number, u: any) => sum + u.totalLoans, 0)
+      const totalConsumablesUsed = Object.values(userStats).reduce((sum: number, u: any) => sum + u.totalConsumables, 0)
+
+      return NextResponse.json({ 
+        data: topUsers,
+        summary: {
+          totalActiveUsers,
+          totalLoans,
+          totalConsumables: totalConsumablesUsed,
+        }
+      })
     })
   } catch (error: unknown) {
     console.error('Top users statistics error:', error)

@@ -1,8 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Dialog } from '@/components/ui/Dialog'
-import { ModalHeader } from '@/components/shared/ModalHeader'
+import { TransitionDialog } from '@/components/ui/TransitionDialog'
 import { History, Package, Search, Filter, CheckCircle, XCircle, Clock } from 'lucide-react'
 import type { ReservationDetails } from '@/types/database'
 
@@ -107,8 +106,15 @@ export function ReservationsHistoryModal({ isOpen, onClose }: ReservationsHistor
   }
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} size="xl" showCloseButton={false}>
-      <ModalHeader title="📜 Historial de Reservas" onClose={onClose} />
+    <TransitionDialog
+      open={isOpen}
+      onClose={onClose}
+      animationType="scale"
+      speed="normal"
+      enableHaptics={true}
+      className="!max-w-4xl"
+      title="📜 Historial de Reservas"
+    >
 
       <div className="p-6">
         {/* Stats Summary */}
@@ -276,6 +282,6 @@ export function ReservationsHistoryModal({ isOpen, onClose }: ReservationsHistor
           )}
         </div>
       </div>
-    </Dialog>
+    </TransitionDialog>
   )
 }

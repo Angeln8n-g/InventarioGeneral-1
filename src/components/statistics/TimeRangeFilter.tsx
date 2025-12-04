@@ -16,7 +16,18 @@ export function TimeRangeFilter({ value, onChange }: TimeRangeFilterProps) {
 
   const handlePresetChange = (type: TimeRange['type']) => {
     setShowCustom(false)
-    onChange({ type })
+    if (type === 'custom') {
+      // If switching to custom, use existing dates if available, otherwise use defaults
+      const today = new Date().toISOString().split('T')[0]
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      onChange({ 
+        type: 'custom', 
+        start: value.type === 'custom' ? value.start : weekAgo, 
+        end: value.type === 'custom' ? value.end : today 
+      })
+    } else {
+      onChange({ type })
+    }
   }
 
   const handleCustomClick = () => {

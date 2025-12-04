@@ -105,20 +105,22 @@ export function validateElectronicDeviceInput(
     })
   }
 
-  // Validate category
+  // Validate category - now accepts any non-empty string since categories are dynamic
   if (!input.category || typeof input.category !== 'string') {
     errors.push({
       field: 'category',
       message: 'La categoría es requerida',
       code: 'REQUIRED_FIELD',
     })
-  } else if (!ELECTRONIC_DEVICE_VALIDATION.category.allowedValues.includes(input.category as ElectronicCategory)) {
+  } else if (input.category.trim().length === 0) {
     errors.push({
       field: 'category',
-      message: 'La categoría seleccionada no es válida',
+      message: 'La categoría no puede estar vacía',
       code: 'INVALID_VALUE',
     })
   }
+  // Note: Category validation against allowed values is now done server-side
+  // since categories are dynamically loaded from the database
 
   // Validate brand (optional)
   if (input.brand && typeof input.brand === 'string') {
@@ -164,10 +166,57 @@ export function validateElectronicDeviceInput(
     }
   }
 
+  // Validate memory capacity (optional, requires unit)
+  const memory_capacity = input.memory_capacity as number | undefined
+  const memory_unit = input.memory_unit as ('GB' | 'TB') | undefined
+  if (memory_capacity !== undefined) {
+    if (typeof memory_capacity !== 'number' || isNaN(memory_capacity) || memory_capacity <= 0) {
+      errors.push({
+        field: 'memory_capacity',
+        message: 'La capacidad de memoria debe ser mayor que 0',
+        code: 'INVALID_VALUE',
+      })
+    }
+    if (memory_capacity > 10000) {
+      errors.push({
+        field: 'memory_capacity',
+        message: 'La capacidad de memoria es demasiado grande',
+        code: 'INVALID_VALUE',
+      })
+    }
+    const validUnits = ['GB', 'TB']
+    if (!memory_unit || !validUnits.includes(memory_unit)) {
+      errors.push({
+        field: 'memory_unit',
+        message: 'La unidad de memoria es requerida cuando se especifica capacidad',
+        code: 'REQUIRED_FIELD',
+      })
+    }
+  }
+
   return {
     isValid: errors.length === 0,
     errors,
   }
+}
+
+export function validateMemoryCapacity(
+  capacity?: number,
+  unit?: 'GB' | 'TB'
+): ValidationResult {
+  const errors: ValidationError[] = []
+  if (capacity !== undefined) {
+    if (capacity <= 0) {
+      errors.push({ field: 'memory_capacity', message: 'La capacidad de memoria debe ser mayor que 0', code: 'INVALID_VALUE' })
+    }
+    if (capacity > 10000) {
+      errors.push({ field: 'memory_capacity', message: 'La capacidad de memoria es demasiado grande', code: 'INVALID_VALUE' })
+    }
+    if (!unit) {
+      errors.push({ field: 'memory_unit', message: 'La unidad de memoria es requerida cuando se especifica capacidad', code: 'REQUIRED_FIELD' })
+    }
+  }
+  return { isValid: errors.length === 0, errors }
 }
 
 // Status display helpers

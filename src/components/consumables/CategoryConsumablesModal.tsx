@@ -5,13 +5,18 @@ import { ConsumableItem } from '@/types/consumables'
 import { ConsumableList } from '@/components/consumables'
 import { Search } from 'lucide-react'
 
+interface CableMarkers {
+    startMarker: number
+    endMarker: number
+}
+
 interface CategoryConsumablesModalProps {
     isOpen: boolean
     onClose: () => void
     category: string
     items: ConsumableItem[]
-    onRequest: (itemTypeId: number, quantity: number) => void
-    onAddToCart: (item: ConsumableItem, quantity: number) => void
+    onRequest: (itemTypeId: number, quantity: number, markers?: CableMarkers) => void
+    onAddToCart: (item: ConsumableItem, quantity: number, markers?: CableMarkers) => void
     requestingItemId: number | null
 }
 

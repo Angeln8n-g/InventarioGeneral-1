@@ -2,11 +2,15 @@ import React, { useState } from 'react'
 import { ElectronicDeviceWithDetails } from '@/types/database'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { getDeviceData } from '@/types/electronics'
+import { getCategoryIcon } from '@/utils/categoryIcons'
 import QRCode from 'qrcode'
 import { TransitionDialog } from '@/components/ui/TransitionDialog'
+import CustomFieldsDisplay from './CustomFieldsDisplay'
 
 interface ElectronicDeviceModalProps {
   device: ElectronicDeviceWithDetails
+  /** Optional category icon from database (overrides default) */
+  categoryIcon?: string | null
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
@@ -15,6 +19,7 @@ interface ElectronicDeviceModalProps {
 
 export const ElectronicDeviceModal: React.FC<ElectronicDeviceModalProps> = ({
   device,
+  categoryIcon,
   onClose,
   onEdit,
   onDelete,
@@ -26,6 +31,9 @@ export const ElectronicDeviceModal: React.FC<ElectronicDeviceModalProps> = ({
 
   // Extract device data with type safety
   const { toolInstance, itemType } = getDeviceData(device)
+  
+  // Get the category icon (from prop or fallback to default)
+  const displayIcon = getCategoryIcon(itemType.category, categoryIcon)
 
   React.useEffect(() => {
     // Generate QR code
@@ -85,13 +93,21 @@ export const ElectronicDeviceModal: React.FC<ElectronicDeviceModalProps> = ({
           {/* Basic Info Section */}
           <div>
             <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-2xl font-bold text-text-light dark:text-text-dark mb-2">
-                  {itemType.name || 'Unknown Device'}
-                </h3>
-                <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor()}`}>
-                  {getStatusLabel(toolInstance.status)}
-                </span>
+              <div className="flex items-start gap-4">
+                {/* Category Icon - Prominently displayed */}
+                <div className={`p-4 rounded-xl ${getStatusColor().replace('text-', 'bg-').replace(/\/10|\/20/g, '/10')} flex items-center justify-center`}>
+                  <span className="text-4xl" role="img" aria-label={itemType.category || 'Device'}>
+                    {displayIcon}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-text-light dark:text-text-dark mb-2">
+                    {itemType.name || 'Unknown Device'}
+                  </h3>
+                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor()}`}>
+                    {getStatusLabel(toolInstance.status)}
+                  </span>
+                </div>
               </div>
               {qrCodeUrl && (
                 <div className="flex flex-col items-center">
@@ -112,39 +128,61 @@ export const ElectronicDeviceModal: React.FC<ElectronicDeviceModalProps> = ({
 
           {/* Device Specifications */}
           <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="font-semibold text-text-light dark:text-text-dark mb-3">Specifications</h4>
+            <h4 className="font-semibold text-text-light dark:text-text-dark mb-3">📑Specifications</h4>
             <div className="grid grid-cols-2 gap-3">
               {itemType.category && (
                 <div>
                   <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Category</span>
-                  <p className="text-sm font-medium text-text-light dark:text-text-dark">{itemType.category}</p>
+                  <p className="text-sm font-medium text-text-light dark:text-text-dark flex items-center gap-1">
+                    <span role="img" aria-hidden="true">{displayIcon}</span>
+                    {itemType.category}
+                  </p>
                 </div>
               )}
               {device.brand && (
                 <div>
-                  <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Brand</span>
+                  <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">🛍️Brand</span>
                   <p className="text-sm font-medium text-text-light dark:text-text-dark">{device.brand}</p>
                 </div>
               )}
+              <div>
+                <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">💾RAM Memory</span>
+                <p className="text-sm font-medium text-text-light dark:text-text-dark">
+                  {device.memory_capacity && device.memory_unit 
+                    ? `${device.memory_capacity} ${device.memory_unit}` 
+                    : 'N/A'}
+                </p>
+              </div>
               {device.model && (
                 <div>
-                  <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Model</span>
+                  <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">⚙️Assetag</span>
                   <p className="text-sm font-medium text-text-light dark:text-text-dark">{device.model}</p>
                 </div>
               )}
               {toolInstance.serial_number && (
                 <div>
-                  <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Serial Number</span>
+                  <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">🔗Serial Number</span>
                   <p className="text-sm font-mono text-text-light dark:text-text-dark">{toolInstance.serial_number}</p>
                 </div>
               )}
             </div>
           </div>
 
+          {/* Custom Fields */}
+          {(device as any).custom_fields && Object.keys((device as any).custom_fields).length > 0 && (
+            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+              <h4 className="font-semibold text-purple-700 dark:text-purple-300 mb-3">📋 Campos Adicionales</h4>
+              <CustomFieldsDisplay
+                customFields={(device as any).custom_fields}
+                variant="detailed"
+              />
+            </div>
+          )}
+
           {/* Condition Notes */}
           {toolInstance.condition_notes && (
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-              <h4 className="font-semibold text-text-light dark:text-text-dark mb-2">Condition Notes</h4>
+              <h4 className="font-semibold text-text-light dark:text-text-dark mb-2">🧾Condition Notes</h4>
               <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
                 {toolInstance.condition_notes}
               </p>

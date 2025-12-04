@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
       username: validatedData.username,
       email: validatedData.email || `${validatedData.username}@example.com`,
       password_hash,
+      full_name: validatedData.full_name,
       role: validatedData.role || 'user',
     })
     

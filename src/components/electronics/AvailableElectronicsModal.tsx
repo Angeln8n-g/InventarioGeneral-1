@@ -3,6 +3,8 @@ import { useSelector } from 'react-redux'
 import type { RootState } from '@/app/store'
 import { ElectronicDeviceWithDetails } from '@/types/database'
 import { getDeviceData } from '@/types/electronics'
+import { useCategoryIcons } from '@/hooks/useCategoryIcons'
+import { TransitionDialog } from '@/components/ui/TransitionDialog'
 
 interface AvailableElectronicsModalProps {
   isOpen: boolean
@@ -19,6 +21,9 @@ export const AvailableElectronicsModal: React.FC<AvailableElectronicsModalProps>
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  
+  // Fetch category icons for dynamic display
+  const { getIcon } = useCategoryIcons()
 
   useEffect(() => {
     if (isOpen && token) {
@@ -79,39 +84,17 @@ export const AvailableElectronicsModal: React.FC<AvailableElectronicsModalProps>
     return categoryMatch && searchMatch
   })
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card-light dark:bg-card-dark rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 bg-card-light dark:bg-card-dark border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
-          <div className="flex-1">
-            <div className="flex items-center space-x-2">
-              <h2 className="text-xl font-semibold text-text-light dark:text-text-dark">
-                Electrónicos Disponibles
-              </h2>
-              {(searchTerm || selectedCategory !== 'all') && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                  Filtrado
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-1">
-              {filteredDevices.length} {filteredDevices.length === 1 ? 'dispositivo' : 'dispositivos'}
-              {selectedCategory !== 'all' && ` en ${selectedCategory}`}
-              {devices.length !== filteredDevices.length && ` de ${devices.length} totales`}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-text-secondary-light dark:text-text-secondary-dark hover:text-text-light dark:hover:text-text-dark transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <TransitionDialog
+      open={isOpen}
+      onClose={onClose}
+      animationType="auto"
+      speed="fast"
+      enableHaptics={true}
+      className="!max-w-4xl !max-h-[90vh] flex flex-col"
+      title="Electrónicos Disponibles"
+      description={`${filteredDevices.length} ${filteredDevices.length === 1 ? 'dispositivo' : 'dispositivos'}${selectedCategory !== 'all' ? ` en ${selectedCategory}` : ''}${devices.length !== filteredDevices.length ? ` de ${devices.length} totales` : ''}`}
+    >
 
         {/* Filters */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 space-y-3">
@@ -244,16 +227,17 @@ export const AvailableElectronicsModal: React.FC<AvailableElectronicsModalProps>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center space-x-3">
                         <div className="p-2 bg-claro-green/10 dark:bg-claro-green/20 rounded-lg">
-                          <svg className="w-6 h-6 text-claro-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
+                          <span className="text-2xl" role="img" aria-label={itemType.category || 'Device'}>
+                            {getIcon(itemType.category)}
+                          </span>
                         </div>
                         <div>
                           <h3 className="font-semibold text-text-light dark:text-text-dark">
                             {itemType.name || 'Unknown Device'}
                           </h3>
                           {itemType.category && (
-                            <span className="inline-block bg-gray-200 dark:bg-gray-700 text-text-light dark:text-text-dark text-xs px-2 py-0.5 rounded mt-1">
+                            <span className="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-700 text-text-light dark:text-text-dark text-xs px-2 py-0.5 rounded mt-1">
+                              <span role="img" aria-hidden="true">{getIcon(itemType.category)}</span>
                               {itemType.category}
                             </span>
                           )}
@@ -320,7 +304,6 @@ export const AvailableElectronicsModal: React.FC<AvailableElectronicsModalProps>
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </TransitionDialog>
   )
 }

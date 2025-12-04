@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
+import { TransitionDialog } from '@/components/ui/TransitionDialog'
 
 interface QuantityModalProps {
   isOpen: boolean
@@ -30,8 +31,6 @@ export const QuantityModal: React.FC<QuantityModalProps> = ({
     }
   }, [isOpen, initialQuantity])
 
-  if (!isOpen) return null
-
   const handleConfirm = () => {
     if (quantity > 0 && quantity <= availableStock) {
       onConfirm(quantity)
@@ -41,20 +40,20 @@ export const QuantityModal: React.FC<QuantityModalProps> = ({
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleConfirm()
-    } else if (e.key === 'Escape') {
-      onCancel()
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-      <div 
-        className="bg-card-light dark:bg-card-dark rounded-lg shadow-2xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 animate-scale-in"
-        onKeyDown={handleKeyPress}
-      >
-        <h3 className="text-lg font-bold text-text-light dark:text-text-dark mb-4">
-          {itemName}
-        </h3>
+    <TransitionDialog
+      open={isOpen}
+      onClose={onCancel}
+      animationType="scale"
+      speed="fast"
+      enableHaptics={true}
+      className="!max-w-md"
+      title={itemName}
+    >
+      <div className="p-6" onKeyDown={handleKeyPress}>
         <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mb-4">
           Available: {availableStock} {unitOfMeasure}
         </p>
@@ -100,6 +99,6 @@ export const QuantityModal: React.FC<QuantityModalProps> = ({
           </Button>
         </div>
       </div>
-    </div>
+    </TransitionDialog>
   )
 }

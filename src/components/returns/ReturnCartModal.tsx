@@ -27,10 +27,10 @@ export function ReturnCartModal({ isOpen, onClose, onConfirm }: ReturnCartModalP
     }
   }
 
-  const handleQuantityChange = (id: number, newQuantity: string) => {
+  const handleQuantityChange = (uniqueKey: string, newQuantity: string) => {
     const num = parseInt(newQuantity, 10)
     if (!isNaN(num) && num > 0) {
-      updateQuantity(id, num)
+      updateQuantity(uniqueKey, num)
     }
   }
 
@@ -98,7 +98,7 @@ export function ReturnCartModal({ isOpen, onClose, onConfirm }: ReturnCartModalP
             <div className="space-y-2 sm:space-y-3">
               {items.map((item) => (
                 <div
-                  key={`${item.id}-${item.consumption_date}`}
+                  key={item.unique_key}
                   className="bg-background-light dark:bg-background-dark rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700"
                 >
                   <div className="flex items-start justify-between mb-2 sm:mb-3">
@@ -117,7 +117,7 @@ export function ReturnCartModal({ isOpen, onClose, onConfirm }: ReturnCartModalP
                       </div>
                     </div>
                     <button
-                      onClick={() => removeItem(item.id)}
+                      onClick={() => removeItem(item.unique_key)}
                       className="text-claro-red hover:text-red-700 transition-colors ml-2 flex-shrink-0"
                       aria-label="Eliminar del carrito"
                     >
@@ -130,7 +130,7 @@ export function ReturnCartModal({ isOpen, onClose, onConfirm }: ReturnCartModalP
                   {/* Quantity Controls */}
                   <div className="flex items-center space-x-2 sm:space-x-3">
                     <button
-                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                      onClick={() => updateQuantity(item.unique_key, item.quantity - 1)}
                       disabled={item.quantity <= 1}
                       className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                     >
@@ -140,14 +140,14 @@ export function ReturnCartModal({ isOpen, onClose, onConfirm }: ReturnCartModalP
                     <input
                       type="number"
                       value={item.quantity}
-                      onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                      onChange={(e) => handleQuantityChange(item.unique_key, e.target.value)}
                       min={1}
                       max={item.max_returnable}
                       className="w-16 sm:w-20 text-center border-2 border-gray-300 dark:border-gray-600 rounded-lg px-1 sm:px-2 py-1 text-xs sm:text-sm font-semibold bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark"
                     />
 
                     <button
-                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                      onClick={() => updateQuantity(item.unique_key, item.quantity + 1)}
                       disabled={item.quantity >= item.max_returnable}
                       className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                     >
@@ -157,6 +157,11 @@ export function ReturnCartModal({ isOpen, onClose, onConfirm }: ReturnCartModalP
                     <span className="text-xs sm:text-sm text-text-secondary-light dark:text-text-secondary-dark truncate">
                       {item.unit_of_measure || 'units'}
                     </span>
+                    {item.segment_start !== undefined && item.segment_end !== undefined && (
+                      <span className="text-[10px] sm:text-xs text-text-secondary-light dark:text-text-secondary-dark truncate">
+                        Segmento: {item.segment_start} → {item.segment_end}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}

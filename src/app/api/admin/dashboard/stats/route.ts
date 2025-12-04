@@ -105,7 +105,15 @@ export async function GET(request: NextRequest) {
       })
     })
   } catch (error: unknown) {
-    console.error('Dashboard stats error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
+    
+    console.error('Dashboard stats error:', {
+      message: errorMessage,
+      details: errorDetails,
+      hint: error instanceof Error && 'cause' in error ? String(error.cause) : '',
+      code: error instanceof Error && 'code' in error ? String((error as { code?: string }).code) : '',
+    })
 
     if (error instanceof Error && error.name === 'AuthenticationError') {
       return NextResponse.json(
@@ -130,6 +138,20 @@ export async function GET(request: NextRequest) {
           },
         },
         { status: 403 }
+      )
+    }
+
+    // Handle fetch/network errors specifically
+    if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {
+      return NextResponse.json(
+        {
+          error: {
+            code: 'CONNECTION_ERROR',
+            message: 'No se pudo conectar a la base de datos. Verifica tu conexión a internet.',
+            timestamp: new Date().toISOString(),
+          },
+        },
+        { status: 503 }
       )
     }
 

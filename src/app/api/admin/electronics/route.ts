@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { electronicDeviceOperations, auditLogOperations, itemTypeOperations } from '@/lib/supabase-client'
+import { customFieldOperations } from '@/lib/db/customFieldOperations'
+import { fieldOperations } from '@/lib/db/fieldOperations'
+import { categoryOperations } from '@/lib/db/categoryOperations'
 import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
@@ -140,6 +143,21 @@ export async function POST(request: NextRequest) {
       // Create the electronic device
       const device = await electronicDeviceOperations.create(body)
 
+      // Handle custom fields if provided
+      if (body.customFields && Array.isArray(body.customFields)) {
+        try {
+          await customFieldOperations.bulkUpsert(
+            device.id,
+            body.customFields.map((cf: { field_id: number; field_value: unknown }) => ({
+              field_id: cf.field_id,
+              field_value: cf.field_value,
+            }))
+          )
+        } catch (customFieldError) {
+          console.error('Failed to save custom fields:', customFieldError)
+        }
+      }
+
       // Create audit log
       try {
         const toolInstance = device.tool_instance as unknown as ToolInstance
@@ -160,8 +178,14 @@ export async function POST(request: NextRequest) {
         console.error('Failed to create audit log:', auditError)
       }
 
+      // Fetch custom fields to include in response
+      const customFields = await customFieldOperations.getByDevice(device.id)
+
       return NextResponse.json({
-        data: device,
+        data: {
+          ...device,
+          customFields,
+        },
         message: 'Electronic device created successfully',
       }, { status: 201 })
     })

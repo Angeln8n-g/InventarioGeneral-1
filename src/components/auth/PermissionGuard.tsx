@@ -170,3 +170,22 @@ export const UserManagementGuard: React.FC<UserManagementGuardProps> = ({
     </PermissionGuard>
   )
 }
+
+interface CategoryManagementGuardProps {
+  children: React.ReactNode
+  fallback?: React.ReactNode
+}
+
+export const CategoryManagementGuard: React.FC<CategoryManagementGuardProps> = ({
+  children,
+  fallback = null,
+}) => {
+  return (
+    <PermissionGuard
+      permission="admin:manage_categories"
+      fallback={fallback}
+    >
+      {children}
+    </PermissionGuard>
+  )
+}

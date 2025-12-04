@@ -1,5 +1,6 @@
+'use client'
 import React from 'react'
-import { AntennaIcon, Cable, Hammer, SatelliteDishIcon, Wifi } from 'lucide-react'
+import { Cable, SatelliteDishIcon, Wifi } from 'lucide-react'
 
 interface QuickActionsProps {
   onCategoryClick: (category: string) => void

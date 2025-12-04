@@ -1,15 +1,22 @@
 import React from 'react'
 import { ElectronicDeviceWithDetails } from '@/types/database'
-import { ELECTRONIC_CATEGORY_ICONS, getDeviceData } from '@/types/electronics'
+import { getDeviceData } from '@/types/electronics'
+import { getCategoryIcon } from '@/utils/categoryIcons'
+import CustomFieldsDisplay from './CustomFieldsDisplay'
 
 interface ElectronicDeviceCardProps {
   device: ElectronicDeviceWithDetails
+  /** Optional category icon from database (overrides default) */
+  categoryIcon?: string | null
   onViewDetails: () => void
 }
 
-export const ElectronicDeviceCard: React.FC<ElectronicDeviceCardProps> = ({ device, onViewDetails }) => {
+export const ElectronicDeviceCard: React.FC<ElectronicDeviceCardProps> = ({ device, categoryIcon, onViewDetails }) => {
   // Extract device data with type safety
   const { toolInstance, itemType } = getDeviceData(device)
+  
+  // Get the category icon (from prop or fallback to default)
+  const displayIcon = getCategoryIcon(itemType.category, categoryIcon)
 
   const getStatusColor = () => {
     switch (toolInstance.status) {
@@ -28,48 +35,13 @@ export const ElectronicDeviceCard: React.FC<ElectronicDeviceCardProps> = ({ devi
     }
   }
 
-  const getCategoryIcon = () => {
-    const iconType = ELECTRONIC_CATEGORY_ICONS[itemType.category as keyof typeof ELECTRONIC_CATEGORY_ICONS]
-    
-    switch (iconType) {
-      case 'laptop':
-        return (
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-        )
-      case 'tablet':
-        return (
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
-        )
-      case 'smartphone':
-        return (
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
-        )
-      case 'keyboard':
-        return (
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-          </svg>
-        )
-      case 'camera':
-        return (
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        )
-      default:
-        return (
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-          </svg>
-        )
-    }
+  // Render the category icon as emoji
+  const renderCategoryIcon = () => {
+    return (
+      <span className="text-3xl" role="img" aria-label={itemType.category || 'Device'}>
+        {displayIcon}
+      </span>
+    )
   }
 
   const getStatusLabel = (status: string) => {
@@ -84,7 +56,7 @@ export const ElectronicDeviceCard: React.FC<ElectronicDeviceCardProps> = ({ devi
       <div className="flex items-start justify-between mb-3">
         <div className={`p-3 rounded-lg ${statusColor.bg}`}>
           <div className={statusColor.icon}>
-            {getCategoryIcon()}
+            {renderCategoryIcon()}
           </div>
         </div>
         <div className="text-right">
@@ -109,22 +81,40 @@ export const ElectronicDeviceCard: React.FC<ElectronicDeviceCardProps> = ({ devi
         {itemType.category && (
           <div className="flex items-center justify-between">
             <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Category:</span>
-            <span className="inline-block bg-gray-100 dark:bg-gray-700 text-text-light dark:text-text-dark text-xs px-2 py-1 rounded">
+            <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-text-light dark:text-text-dark text-xs px-2 py-1 rounded">
+              <span role="img" aria-hidden="true">{displayIcon}</span>
               {itemType.category}
             </span>
           </div>
         )}
         {device.brand && (
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Brand:</span>
+            <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">🛍️Brand:</span>
             <span className="text-xs font-medium text-text-light dark:text-text-dark">
               {device.brand}
             </span>
           </div>
         )}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">💾RAM Memory:</span>
+          <span className="text-xs font-medium text-text-light dark:text-text-dark">
+            {(() => {
+              // First check custom fields for RAM Memory
+              const customFields = (device as any).custom_fields
+              if (customFields?.['RAM Memory']) {
+                return customFields['RAM Memory']
+              }
+              // Fallback to direct memory fields
+              if (device.memory_capacity && device.memory_unit) {
+                return `${device.memory_capacity} ${device.memory_unit}`
+              }
+              return 'N/A'
+            })()}
+          </span>
+        </div>
         {device.model && (
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Model:</span>
+            <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">⚙️Assetag:</span>
             <span className="text-xs font-medium text-text-light dark:text-text-dark">
               {device.model}
             </span>
@@ -132,13 +122,40 @@ export const ElectronicDeviceCard: React.FC<ElectronicDeviceCardProps> = ({ devi
         )}
         {toolInstance.serial_number && (
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Serial:</span>
+            <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">🔗Serial:</span>
             <span className="text-xs font-mono text-text-light dark:text-text-dark">
               {toolInstance.serial_number}
             </span>
           </div>
         )}
       </div>
+
+      {/* Assignment Info */}
+      {(device as any).current_assignment && (
+        <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs">
+          <div className="flex items-center">
+            <svg className="w-3 h-3 mr-1 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="text-blue-700 dark:text-blue-300 font-medium">
+              Asignada: {(device as any).current_assignment.classroom?.name || 'Aula desconocida'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Fields */}
+      {(device as any).custom_fields && Object.keys((device as any).custom_fields).length > 0 && (
+        <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded">
+          <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-1">Campos adicionales:</p>
+          <CustomFieldsDisplay
+            customFields={(device as any).custom_fields}
+            variant="compact"
+            maxFields={3}
+          />
+        </div>
+      )}
 
       {/* Condition Notes */}
       {toolInstance.condition_notes && (

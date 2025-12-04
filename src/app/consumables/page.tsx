@@ -70,7 +70,7 @@ function ConsumablesPageContent() {
   )
 
   // Memoized handlers to prevent unnecessary re-renders
-  const handleRequestConsumable = useCallback(async (itemTypeId: number, quantity: number) => {
+  const handleRequestConsumable = useCallback(async (itemTypeId: number, quantity: number, markers?: { startMarker: number; endMarker: number }) => {
     setRequestingItemId(itemTypeId)
 
     try {
@@ -83,6 +83,11 @@ function ConsumablesPageContent() {
         body: JSON.stringify({
           item_type_id: itemTypeId,
           requested_quantity: quantity,
+          // Include cable markers if provided
+          ...(markers && {
+            start_marker: markers.startMarker,
+            end_marker: markers.endMarker,
+          }),
         }),
       })
 
@@ -108,7 +113,7 @@ function ConsumablesPageContent() {
     }
   }, [refetch])
 
-  const handleAddToCart = useCallback((item: ConsumableItem, quantity: number) => {
+  const handleAddToCart = useCallback((item: ConsumableItem, quantity: number, markers?: { startMarker: number; endMarker: number }) => {
     addItem({
       id: item.id,
       name: item.name,
@@ -116,6 +121,11 @@ function ConsumablesPageContent() {
       category: item.category,
       unit_of_measure: item.stock?.unit_of_measure,
       available_stock: item.stock?.current_quantity || 0,
+      // Include cable markers if provided
+      ...(markers && {
+        start_marker: markers.startMarker,
+        end_marker: markers.endMarker,
+      }),
     }, quantity)
 
     toastSuccess(`${item.name} agregado al carrito (${quantity} ${item.stock?.unit_of_measure || 'units'})`)
@@ -133,24 +143,54 @@ function ConsumablesPageContent() {
           body: JSON.stringify({
             item_type_id: item.id,
             requested_quantity: item.quantity,
+            // Include cable markers if present
+            ...(item.start_marker !== undefined && item.end_marker !== undefined && {
+              start_marker: item.start_marker,
+              end_marker: item.end_marker,
+            }),
           }),
         })
       )
 
       const responses = await Promise.all(promises)
-      const allSuccessful = responses.every(response => response.ok)
 
-      if (allSuccessful) {
+      // Build detailed failure messages mapped to items
+      const detailedResults = await Promise.all(
+        responses.map(async (response, index) => {
+          if (response.ok) {
+            return { ok: true, itemName: cartItems[index].name }
+          }
+          let message = response.statusText
+          try {
+            const errorData = await response.json()
+            message = errorData?.error?.message || message
+          } catch (_) {
+            // ignore JSON parse errors
+          }
+          return { ok: false, itemName: cartItems[index].name, message }
+        })
+      )
+
+      const failed = detailedResults.filter(r => !r.ok)
+
+      if (failed.length === 0) {
         clearCart()
-        toastSuccess(`Todas las solicitudes han sido enviadas exitosamente! (${cartItems.length} items)`)
+        toastSuccess(`Todas las solicitudes han sido enviadas exitosamente! (${cartItems.length} items)`) 
         refetch()
-      } else {
-        throw new Error('Some requests failed')
+        return
       }
+
+      // At least one request failed — show a helpful error and keep the cart intact
+      const summary = failed
+        .map(f => `${f.itemName}${f.message ? `: ${f.message}` : ''}`)
+        .join('; ')
+      toastError(`Algunas solicitudes fallaron. Revisa y vuelve a intentar. (${summary})`)
+      return
     } catch (error) {
       console.error('Error confirming cart:', error)
       toastError('Error al procesar las solicitudes. Por favor, intenta de nuevo.')
-      throw error
+      // Do not rethrow to avoid noisy console errors
+      return
     }
   }, [cartItems, clearCart, refetch])
 
@@ -168,6 +208,11 @@ function ConsumablesPageContent() {
             reserved_quantity: item.quantity,
             expiration_date: expirationDate,
             purpose,
+            // Include cable markers if present
+            ...(item.start_marker !== undefined && item.end_marker !== undefined && {
+              start_marker: item.start_marker,
+              end_marker: item.end_marker,
+            }),
           }),
         })
       )

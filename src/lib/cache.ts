@@ -176,6 +176,10 @@ export const CacheKeys = {
   CONSUMABLE_STOCK: (id: number) => `consumable_stock:${id}`,
   USER: (id: number) => `user:${id}`,
   DASHBOARD_STATS: 'dashboard:stats',
+  DEVICE_CATEGORIES_ALL: 'device_categories:all',
+  DEVICE_CATEGORIES_ACTIVE: 'device_categories:active',
+  DEVICE_CATEGORY: (id: number) => `device_category:${id}`,
+  CATEGORY_FIELDS: (categoryId: number) => `category_fields:${categoryId}`,
 } as const
 
 /**

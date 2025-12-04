@@ -53,6 +53,8 @@ function ReturnPageContent() {
         returned_quantity: item.quantity,
         consumption_date: item.consumption_date,
         notes: `Devolución de ${item.quantity} ${item.unit_of_measure} de ${item.name}`,
+        segment_start: item.segment_start,
+        segment_end: item.segment_end,
       }))
 
       // Use RTK Query mutation

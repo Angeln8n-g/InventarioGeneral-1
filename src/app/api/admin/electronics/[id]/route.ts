@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { electronicDeviceOperations, auditLogOperations } from '@/lib/supabase-client'
+import { customFieldOperations } from '@/lib/db/customFieldOperations'
 import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
@@ -44,8 +45,14 @@ export async function GET(
         )
       }
 
+      // Get custom fields for this device
+      const customFields = await customFieldOperations.getByDevice(deviceId)
+
       return NextResponse.json({
-        data: device,
+        data: {
+          ...device,
+          customFields,
+        },
       })
     })
   } catch (error: unknown) {
@@ -114,8 +121,8 @@ export async function PUT(
 
       const body = await request.json()
 
-      // Validate input (partial validation for updates)
-      if (body.name || body.category) {
+      // Validate input (partial validation for updates) including memory fields
+      if (body.name || body.category || body.memory_capacity !== undefined) {
         const validation = validateElectronicDeviceInput({
           name: body.name || 'temp',
           category: body.category || 'Otros',
@@ -155,6 +162,21 @@ export async function PUT(
       // Update device
       const updatedDevice = await electronicDeviceOperations.update(deviceId, body)
 
+      // Handle custom fields if provided
+      if (body.customFields && Array.isArray(body.customFields)) {
+        try {
+          await customFieldOperations.bulkUpsert(
+            deviceId,
+            body.customFields.map((cf: { field_id: number; field_value: unknown }) => ({
+              field_id: cf.field_id,
+              field_value: cf.field_value,
+            }))
+          )
+        } catch (customFieldError) {
+          console.error('Failed to update custom fields:', customFieldError)
+        }
+      }
+
       // Create audit log
       try {
         await auditLogOperations.create({
@@ -171,8 +193,14 @@ export async function PUT(
         console.error('Failed to create audit log:', auditError)
       }
 
+      // Fetch updated custom fields
+      const customFields = await customFieldOperations.getByDevice(deviceId)
+
       return NextResponse.json({
-        data: updatedDevice,
+        data: {
+          ...updatedDevice,
+          customFields,
+        },
         message: 'Electronic device updated successfully',
       })
     })

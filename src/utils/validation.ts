@@ -24,6 +24,11 @@ export const createUserSchema = yup.object({
     .string()
     .required('Password is required')
     .min(6, 'Password must be at least 6 characters'),
+  full_name: yup
+    .string()
+    .required('Full name is required')
+    .min(2, 'Full name must be at least 2 characters')
+    .max(100, 'Full name must be less than 100 characters'),
   role: yup
     .string()
     .oneOf(['user', 'admin'], 'Role must be user or admin')
@@ -40,6 +45,10 @@ export const updateUserSchema = yup.object({
     .string()
     .email('Invalid email format')
     .max(100, 'Email must be less than 100 characters'),
+  full_name: yup
+    .string()
+    .min(2, 'Full name must be at least 2 characters')
+    .max(100, 'Full name must be less than 100 characters'),
   role: yup
     .string()
     .oneOf(['user', 'admin'], 'Role must be user or admin'),

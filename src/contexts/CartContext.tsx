@@ -11,6 +11,9 @@ export interface CartItem {
   quantity: number
   unit_of_measure?: string
   available_stock: number
+  // Cable markers for items measured in meters/feet
+  start_marker?: number
+  end_marker?: number
 }
 
 interface CartContextType {

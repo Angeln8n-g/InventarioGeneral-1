@@ -18,6 +18,8 @@ import { useConsumeConsumableMutation } from '@/services/api'
 import { toastSuccess, toastError, toastWarning } from '@/lib/toast'
 import { OptimizedBackgroundImage } from '@/components/ui/OptimizedBackgroundImage'
 import { BACKGROUND_IMAGES } from '@/types/images'
+import { isCableUnit } from '@/utils/cableDetection'
+import { CableMeasurementCalculator } from '@/components/consumables/CableMeasurementCalculator'
 
 // Lazy load modal
 const CartModal = dynamic(() => import('@/components/cart/CartModal').then(mod => ({ default: mod.CartModal })), {
@@ -55,6 +57,7 @@ function ConsumableScanPageContent() {
   const { addItem, items: cartItems, clearCart } = useCart()
   const [showQuantityModal, setShowQuantityModal] = useState(false)
   const [pendingConsumable, setPendingConsumable] = useState<ConsumableData | null>(null)
+  const [calcResult, setCalcResult] = useState<{ startMarker: number; endMarker: number; length: number } | null>(null)
 
   // RTK Query hook
   const [consumeConsumable, { isLoading: isConsuming }] = useConsumeConsumableMutation()
@@ -164,7 +167,39 @@ function ConsumableScanPageContent() {
   const handleAddToCart = () => {
     if (!pendingConsumable) return
 
-    // Get final quantity (default to 1 if empty)
+    const isCable = isCableUnit(pendingConsumable.unit_of_measure || null)
+
+    if (isCable) {
+      // Require valid calculator result
+      if (!calcResult || calcResult.length <= 0 || calcResult.length > pendingConsumable.current_quantity) {
+        toastWarning('Valores de marcador inválidos o exceden el stock')
+        return
+      }
+
+      // Bypass cart: submit consumption immediately with markers
+      consumeConsumable({
+        qr_code: pendingConsumable.qr_code,
+        quantity: calcResult.length,
+        start_marker: calcResult.startMarker,
+        end_marker: calcResult.endMarker,
+        notes: `Consumido vía escáner QR (segmento ${calcResult.startMarker}→${calcResult.endMarker})`,
+      })
+        .unwrap()
+        .then(() => {
+          toastSuccess(`Consumo registrado: ${calcResult.length} ${pendingConsumable.unit_of_measure || 'unidades'} (segmento ${calcResult.startMarker}→${calcResult.endMarker})`)
+          setShowQuantityModal(false)
+          setPendingConsumable(null)
+          setQuantity(1)
+          setCalcResult(null)
+        })
+        .catch((err) => {
+          console.error('Error en consumo con marcadores:', err)
+          toastError(err?.data?.error?.message || 'Error al consumir cable con marcadores')
+        })
+      return
+    }
+
+    // Get final quantity (default to 1 if empty) for non-cable items
     const finalQuantity = quantity === '' ? 1 : (typeof quantity === 'number' ? quantity : parseInt(quantity))
 
     if (finalQuantity <= 0 || finalQuantity > pendingConsumable.current_quantity) {
@@ -294,84 +329,101 @@ function ConsumableScanPageContent() {
                   )}
 
                   <div className="space-y-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-                    {/* Quick Quantity Buttons */}
-                    <div className="flex gap-2">
-                      {[1, 5, 10].map((value) => (
-                        <button
-                          key={value}
-                          onClick={() => setQuantity(Math.min(value, pendingConsumable.current_quantity))}
-                          disabled={value > pendingConsumable.current_quantity}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${quantity === value
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Quantity Input with +/- Buttons */}
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => {
-                          const current = quantity === '' ? 0 : (typeof quantity === 'number' ? quantity : parseInt(quantity))
-                          setQuantity(Math.max(0, current - 1))
+                    {isCableUnit(pendingConsumable.unit_of_measure || null) ? (
+                      <CableMeasurementCalculator
+                        mode="consumption"
+                        unitOfMeasure={pendingConsumable.unit_of_measure || 'unidades'}
+                        maxAvailableLength={pendingConsumable.current_quantity}
+                        onValidChange={(payload) => {
+                          setCalcResult(payload)
                         }}
-                        className="w-10 h-10 rounded-lg border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 text-text-light dark:text-text-dark transition-all font-bold text-lg"
-                      >
-                        −
-                      </button>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={quantity}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          if (value === '') {
-                            setQuantity('')
-                            return
-                          }
-                          const numValue = parseInt(value)
-                          if (!isNaN(numValue) && numValue >= 0) {
-                            setQuantity(Math.min(numValue, pendingConsumable.current_quantity))
-                          }
-                        }}
-                        onBlur={() => {
-                          if (quantity === '' || quantity === 0) {
-                            setQuantity(1)
-                          }
-                        }}
-                        placeholder="1"
-                        className="w-20 text-center border-2 border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base font-semibold bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
-                        autoFocus
                       />
-                      <button
-                        onClick={() => {
-                          const current = quantity === '' ? 0 : (typeof quantity === 'number' ? quantity : parseInt(quantity))
-                          setQuantity(Math.min(current + 1, pendingConsumable.current_quantity))
-                        }}
-                        disabled={(quantity === '' ? 0 : (typeof quantity === 'number' ? quantity : parseInt(quantity))) >= pendingConsumable.current_quantity}
-                        className="w-10 h-10 rounded-lg border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 text-text-light dark:text-text-dark transition-all font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        +
-                      </button>
-                    </div>
+                    ) : (
+                      <>
+                        {/* Quick Quantity Buttons */}
+                        <div className="flex gap-2">
+                          {[1, 5, 10].map((value) => (
+                            <button
+                              key={value}
+                              onClick={() => setQuantity(Math.min(value, pendingConsumable.current_quantity))}
+                              disabled={value > pendingConsumable.current_quantity}
+                              className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${quantity === value
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                              {value}
+                            </button>
+                          ))}
+                        </div>
 
-                    {/* Stock Info */}
-                    <div className="text-center text-xs text-gray-500 dark:text-gray-400">
-                      Available: {pendingConsumable.current_quantity} {pendingConsumable.unit_of_measure || 'unidades'}
-                    </div>
+                        {/* Quantity Input with +/- Buttons */}
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => {
+                              const current = quantity === '' ? 0 : (typeof quantity === 'number' ? quantity : parseInt(quantity))
+                              setQuantity(Math.max(0, current - 1))
+                            }}
+                            className="w-10 h-10 rounded-lg border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 text-text-light dark:text-text-dark transition-all font-bold text-lg"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={quantity}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              if (value === '') {
+                                setQuantity('')
+                                return
+                              }
+                              const numValue = parseInt(value)
+                              if (!isNaN(numValue) && numValue >= 0) {
+                                setQuantity(Math.min(numValue, pendingConsumable.current_quantity))
+                              }
+                            }}
+                            onBlur={() => {
+                              if (quantity === '' || quantity === 0) {
+                                setQuantity(1)
+                              }
+                            }}
+                            placeholder="1"
+                            className="w-20 text-center border-2 border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base font-semibold bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => {
+                              const current = quantity === '' ? 0 : (typeof quantity === 'number' ? quantity : parseInt(quantity))
+                              setQuantity(Math.min(current + 1, pendingConsumable.current_quantity))
+                            }}
+                            disabled={(quantity === '' ? 0 : (typeof quantity === 'number' ? quantity : parseInt(quantity))) >= pendingConsumable.current_quantity}
+                            className="w-10 h-10 rounded-lg border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 text-text-light dark:text-text-dark transition-all font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        {/* Stock Info */}
+                        <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+                          Available: {pendingConsumable.current_quantity} {pendingConsumable.unit_of_measure || 'unidades'}
+                        </div>
+                      </>
+                    )}
 
                     {/* Action Buttons */}
                     <div className="space-y-2">
                       <button
                         onClick={handleAddToCart}
-                        disabled={quantity === '' || quantity === 0 || (typeof quantity === 'number' && quantity > pendingConsumable.current_quantity)}
+                        disabled={
+                          isCableUnit(pendingConsumable.unit_of_measure || null)
+                            ? !calcResult || calcResult.length <= 0 || calcResult.length > pendingConsumable.current_quantity
+                            : quantity === '' || quantity === 0 || (typeof quantity === 'number' && quantity > pendingConsumable.current_quantity)
+                        }
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <ShoppingCart className="w-4 h-4" />
-                        <span>Agregar al Carrito</span>
+                        <span>{isCableUnit(pendingConsumable.unit_of_measure || null) ? 'Consumir' : 'Agregar al Carrito'}</span>
                       </button>
 
                       <Button

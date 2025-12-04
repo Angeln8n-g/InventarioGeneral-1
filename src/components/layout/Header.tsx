@@ -133,9 +133,11 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="bg-claro-red dark:bg-gray-900 shadow-md p-4 flex justify-between items-center fixed top-0 w-full z-50 h-16">
       <div className="flex justify-between items-center w-full">
         {/* Logo/Title */}
-        <h1 className="text-xl font-bold text-white dark:text-white">
-          {title}
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-bold text-white dark:text-white">
+            {title}
+          </h1>
+        </div>
 
         {/* Right side actions */}
         {user && (

@@ -17,7 +17,12 @@ export async function GET(request: NextRequest) {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       const defaultStartDate = thirtyDaysAgo.toISOString().split('T')[0]
 
-      // Get stock movements (consumptions)
+      // Get stock movements (consumptions) - try with marker data first, fallback without
+      let movements: any[] | null = null
+      let movementsError: any = null
+      let hasMarkerColumns = true
+
+      // Try query with marker columns first
       let query = supabase
         .from('stock_movements')
         .select(`
@@ -25,6 +30,8 @@ export async function GET(request: NextRequest) {
           created_at,
           quantity,
           consumable_stock_id,
+          start_marker,
+          end_marker,
           consumable_stock:consumable_stock!inner(
             id,
             item_type_id,
@@ -49,25 +56,86 @@ export async function GET(request: NextRequest) {
         query = query.eq('consumable_stock.item_type_id', parseInt(itemTypeId, 10))
       }
 
-      const { data: movements, error: movementsError } = await query.order('created_at', { ascending: false })
+      const result = await query.order('created_at', { ascending: false })
+      
+      // If marker columns don't exist, retry without them
+      if (result.error && result.error.code === '42703') {
+        hasMarkerColumns = false
+        let fallbackQuery = supabase
+          .from('stock_movements')
+          .select(`
+            id,
+            created_at,
+            quantity,
+            consumable_stock_id,
+            consumable_stock:consumable_stock!inner(
+              id,
+              item_type_id,
+              unit_of_measure,
+              item_type:item_types!inner(
+                id,
+                name,
+                description
+              )
+            )
+          `)
+          .eq('user_id', authContext.user.id)
+          .eq('movement_type', 'consumption')
+          .lt('quantity', 0)
+          .gte('created_at', startDate || defaultStartDate)
+
+        if (endDate) {
+          fallbackQuery = fallbackQuery.lte('created_at', endDate + 'T23:59:59')
+        }
+
+        if (itemTypeId) {
+          fallbackQuery = fallbackQuery.eq('consumable_stock.item_type_id', parseInt(itemTypeId, 10))
+        }
+
+        const fallbackResult = await fallbackQuery.order('created_at', { ascending: false })
+        movements = fallbackResult.data
+        movementsError = fallbackResult.error
+      } else {
+        movements = result.data
+        movementsError = result.error
+      }
 
       if (movementsError) {
         throw movementsError
       }
 
-      // Get returns for this user
-      const { data: returns, error: returnsError } = await supabase
+      // Get returns for this user - try with segment data first, fallback without
+      let returns: any[] | null = null
+      let returnsError: any = null
+
+      const returnsResult = await supabase
         .from('consumable_returns')
-        .select('item_type_id, returned_quantity, original_consumption_date')
+        .select('item_type_id, returned_quantity, original_consumption_date, segment_start, segment_end, return_date')
         .eq('user_id', authContext.user.id)
         .eq('status', 'completed')
         .gte('original_consumption_date', startDate || defaultStartDate)
+
+      // If segment columns don't exist, retry without them
+      if (returnsResult.error && returnsResult.error.code === '42703') {
+        const fallbackReturnsResult = await supabase
+          .from('consumable_returns')
+          .select('item_type_id, returned_quantity, original_consumption_date, return_date')
+          .eq('user_id', authContext.user.id)
+          .eq('status', 'completed')
+          .gte('original_consumption_date', startDate || defaultStartDate)
+        
+        returns = fallbackReturnsResult.data
+        returnsError = fallbackReturnsResult.error
+      } else {
+        returns = returnsResult.data
+        returnsError = returnsResult.error
+      }
 
       if (returnsError) {
         throw returnsError
       }
 
-      // Group movements by date and item
+      // Group movements by date and item with marker data
       const groupedByDate: Record<string, Record<number, any>> = {}
 
       movements?.forEach((movement: any) => {
@@ -87,19 +155,34 @@ export async function GET(request: NextRequest) {
             consumed_quantity: 0,
             returned_quantity: 0,
             unit_of_measure: movement.consumable_stock.unit_of_measure || 'units',
+            // Cable marker fields (null for legacy records or non-cable items)
+            start_marker: movement.start_marker,
+            end_marker: movement.end_marker,
+            // Array to store returned segments
+            returned_segments: [],
           }
         }
 
         groupedByDate[date][itemTypeId].consumed_quantity += Math.abs(movement.quantity)
       })
 
-      // Add returns to the grouped data
+      // Add returns to the grouped data with segment information
       returns?.forEach((returnItem: any) => {
         const date = returnItem.original_consumption_date
         const itemTypeId = returnItem.item_type_id
 
         if (groupedByDate[date] && groupedByDate[date][itemTypeId]) {
           groupedByDate[date][itemTypeId].returned_quantity += returnItem.returned_quantity
+          
+          // Add segment information if available (for cable returns)
+          if (returnItem.segment_start !== null && returnItem.segment_end !== null) {
+            groupedByDate[date][itemTypeId].returned_segments.push({
+              segment_start: returnItem.segment_start,
+              segment_end: returnItem.segment_end,
+              return_date: returnItem.return_date,
+              returned_quantity: returnItem.returned_quantity,
+            })
+          }
         }
       })
 

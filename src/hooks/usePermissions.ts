@@ -15,6 +15,7 @@ import {
   canViewAllLoans,
   canGenerateReports,
   canConfigureSystem,
+  canManageCategories,
   type Permission,
 } from '@/lib/permissions'
 
@@ -42,6 +43,7 @@ export const usePermissions = () => {
     canViewAllLoans: () => canViewAllLoans(user),
     canGenerateReports: () => canGenerateReports(user),
     canConfigureSystem: () => canConfigureSystem(user),
+    canManageCategories: () => canManageCategories(user),
     
     // Role checks
     isAdmin: user?.role === 'admin',

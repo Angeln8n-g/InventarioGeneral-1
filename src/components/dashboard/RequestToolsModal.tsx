@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { Html5QrcodeScanner } from 'html5-qrcode'
-import { Dialog } from '@/components/ui/Dialog'
-import { ModalHeader } from '@/components/shared/ModalHeader'
+import { TransitionDialog } from '@/components/ui/TransitionDialog'
+
 import { ShoppingCart } from 'lucide-react'
 import { BagProvider, useBag } from '@/contexts/BagContext'
 import { BagModal } from '@/components/bag/BagModal'
@@ -253,11 +253,15 @@ function RequestToolsModalContent({
 
   return (
     <>
-      <Dialog isOpen={isOpen} onClose={onClose} size="lg" showCloseButton={false}>
-        <ModalHeader
-          title="Solicitar Herramientas o equipo"
-          onClose={onClose}
-        />
+      <TransitionDialog
+        open={isOpen}
+        onClose={onClose}
+        animationType="auto"
+        speed="normal"
+        enableHaptics={true}
+        className="!max-w-lg"
+        title="Solicitar Herramientas o equipo"
+      >
 
         <div className="p-6">
           {/* Tool Modal */}
@@ -479,7 +483,7 @@ function RequestToolsModalContent({
             </div>
           </div>
         )}
-      </Dialog>
+      </TransitionDialog>
 
       {/* Bag Modal */}
       <BagModal

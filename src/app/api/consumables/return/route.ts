@@ -3,12 +3,18 @@ import { withAuth } from '@/lib/auth-middleware'
 import { supabase } from '@/lib/supabase'
 import { auditLogOperations, notificationOperations } from '@/lib/supabase-client'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
+import { isCableUnit } from '@/utils/cableDetection'
+import { calculateLength } from '@/utils/markerValidation'
+import { validateSegmentReturn } from '@/utils/segmentOverlap'
 
 interface ReturnItem {
   item_type_id: number
   returned_quantity: number
   consumption_date: string
   notes?: string
+  // Cable segment fields (optional)
+  segment_start?: number
+  segment_end?: number
 }
 
 export async function POST(request: NextRequest) {
@@ -37,13 +43,8 @@ export async function POST(request: NextRequest) {
 
       for (const returnItem of returns) {
         // Validate required fields
-        if (!returnItem.item_type_id || !returnItem.returned_quantity || !returnItem.consumption_date) {
+        if (!returnItem.item_type_id || !returnItem.consumption_date) {
           validationErrors.push(`Missing required fields for item_type_id: ${returnItem.item_type_id}`)
-          continue
-        }
-
-        if (returnItem.returned_quantity <= 0) {
-          validationErrors.push(`Invalid quantity for item_type_id ${returnItem.item_type_id}: must be greater than 0`)
           continue
         }
 
@@ -53,7 +54,9 @@ export async function POST(request: NextRequest) {
           .select(`
             consumable_stock_id,
             quantity,
-            consumable_stock!inner(item_type_id)
+            start_marker,
+            end_marker,
+            consumable_stock!inner(item_type_id, unit_of_measure)
           `)
           .eq('user_id', authContext.user.id)
           .eq('consumable_stock.item_type_id', returnItem.item_type_id)
@@ -72,6 +75,89 @@ export async function POST(request: NextRequest) {
         // Calculate total consumed
         const consumedQuantity = movements.reduce((sum, m) => sum + Math.abs(m.quantity), 0)
         const consumableStockId = movements[0].consumable_stock_id
+        const unitOfMeasure = (movements[0].consumable_stock as any).unit_of_measure
+        const isCable = isCableUnit(unitOfMeasure)
+        
+        // Get consumed markers if this is a cable consumption
+        const consumedStartMarker = movements[0].start_marker
+        const consumedEndMarker = movements[0].end_marker
+
+        // Validate cable segment inputs
+        let returnedQuantity = returnItem.returned_quantity
+        let segmentStart: number | null = null
+        let segmentEnd: number | null = null
+
+        if (isCable && (returnItem.segment_start !== undefined || returnItem.segment_end !== undefined)) {
+          // Cable return with segment markers
+          if (returnItem.segment_start === undefined || returnItem.segment_end === undefined) {
+            validationErrors.push(
+              `Both segment_start and segment_end are required for cable returns (item_type_id: ${returnItem.item_type_id})`
+            )
+            continue
+          }
+
+          segmentStart = returnItem.segment_start
+          segmentEnd = returnItem.segment_end
+
+          // Validate segment markers
+          if (segmentEnd <= segmentStart) {
+            validationErrors.push(
+              `Invalid segment for item_type_id ${returnItem.item_type_id}: segment_end (${segmentEnd}) must be greater than segment_start (${segmentStart})`
+            )
+            continue
+          }
+
+          // Calculate returned quantity from segment
+          returnedQuantity = calculateLength(segmentStart, segmentEnd, 2)
+
+          // Validate segment is within consumed range (if markers exist)
+          if (consumedStartMarker !== null && consumedEndMarker !== null) {
+            if (segmentStart < consumedStartMarker || segmentEnd > consumedEndMarker) {
+              validationErrors.push(
+                `Segment [${segmentStart}-${segmentEnd}] is outside consumed range [${consumedStartMarker}-${consumedEndMarker}] for item_type_id ${returnItem.item_type_id}`
+              )
+              continue
+            }
+          }
+
+          // Check for overlapping segments in existing returns
+          const { data: existingReturns, error: returnsError } = await supabase
+            .from('consumable_returns')
+            .select('segment_start, segment_end, return_date')
+            .eq('user_id', authContext.user.id)
+            .eq('item_type_id', returnItem.item_type_id)
+            .eq('original_consumption_date', returnItem.consumption_date)
+            .eq('status', 'completed')
+            .not('segment_start', 'is', null)
+            .not('segment_end', 'is', null)
+
+          if (returnsError) {
+            validationErrors.push(`Error checking returns for item_type_id ${returnItem.item_type_id}`)
+            continue
+          }
+
+          // Validate no overlap with existing segments
+          const overlapValidation = validateSegmentReturn(
+            segmentStart,
+            segmentEnd,
+            existingReturns || []
+          )
+
+          if (!overlapValidation.isValid) {
+            validationErrors.push(
+              `Overlapping segment detected for item_type_id ${returnItem.item_type_id}: ${overlapValidation.message}`
+            )
+            continue
+          }
+        } else {
+          // Standard quantity-based return (non-cable or legacy)
+          if (!returnItem.returned_quantity || returnItem.returned_quantity <= 0) {
+            validationErrors.push(
+              `Invalid quantity for item_type_id ${returnItem.item_type_id}: must be greater than 0`
+            )
+            continue
+          }
+        }
 
         // Get already returned quantity
         const { data: existingReturns, error: returnsError } = await supabase
@@ -87,19 +173,19 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        const returnedQuantity = existingReturns?.reduce((sum, r) => sum + r.returned_quantity, 0) || 0
-        const returnableQuantity = consumedQuantity - returnedQuantity
+        const alreadyReturnedQuantity = existingReturns?.reduce((sum, r) => sum + r.returned_quantity, 0) || 0
+        const returnableQuantity = consumedQuantity - alreadyReturnedQuantity
 
         const consumption = {
           consumable_stock_id: consumableStockId,
           consumed_quantity: consumedQuantity,
-          returned_quantity: returnedQuantity
+          returned_quantity: alreadyReturnedQuantity
         }
 
-        if (returnItem.returned_quantity > returnableQuantity) {
+        if (returnedQuantity > returnableQuantity) {
           validationErrors.push(
-            `Cannot return ${returnItem.returned_quantity} of item_type_id ${returnItem.item_type_id}. ` +
-            `Maximum returnable: ${returnableQuantity} (consumed: ${consumption.consumed_quantity}, ` +
+            `Cannot return ${returnedQuantity} of item_type_id ${returnItem.item_type_id}. ` +
+            `Maximum returnable: ${returnableQuantity.toFixed(2)} (consumed: ${consumption.consumed_quantity}, ` +
             `already returned: ${consumption.returned_quantity})`
           )
           continue
@@ -123,18 +209,20 @@ export async function POST(request: NextRequest) {
           user_id: authContext.user.id,
           item_type_id: returnItem.item_type_id,
           consumable_stock_id: consumption.consumable_stock_id,
-          returned_quantity: returnItem.returned_quantity,
+          returned_quantity: returnedQuantity,
           original_consumption_date: returnItem.consumption_date,
           notes: returnItem.notes || null,
           status: 'completed',
+          segment_start: segmentStart,
+          segment_end: segmentEnd,
         })
 
         stockUpdates.push({
           stock_id: stock.id,
           item_type_id: stock.item_type_id,
           old_quantity: stock.current_quantity,
-          new_quantity: stock.current_quantity + returnItem.returned_quantity,
-          adjustment: returnItem.returned_quantity,
+          new_quantity: stock.current_quantity + returnedQuantity,
+          adjustment: returnedQuantity,
         })
       }
 
@@ -158,22 +246,52 @@ export async function POST(request: NextRequest) {
 
         // Insert returns
         for (const returnData of processedReturns) {
-          const { data: returnRecord, error: insertError } = await supabase
+          const insertData: any = {
+            user_id: returnData.user_id,
+            item_type_id: returnData.item_type_id,
+            consumable_stock_id: returnData.consumable_stock_id,
+            returned_quantity: returnData.returned_quantity,
+            original_consumption_date: returnData.original_consumption_date,
+            notes: returnData.notes,
+            status: returnData.status,
+          }
+
+          // Add segment fields if present
+          if (returnData.segment_start !== null && returnData.segment_end !== null) {
+            insertData.segment_start = returnData.segment_start
+            insertData.segment_end = returnData.segment_end
+          }
+
+          let returnRecord: any = null
+          const { data, error: insertError } = await supabase
             .from('consumable_returns')
-            .insert({
+            .insert(insertData)
+            .select()
+            .single()
+
+          // If segment columns don't exist, retry without them
+          if (insertError && insertError.code === '42703' && returnData.segment_start !== null) {
+            const basicInsertData = {
               user_id: returnData.user_id,
               item_type_id: returnData.item_type_id,
               consumable_stock_id: returnData.consumable_stock_id,
               returned_quantity: returnData.returned_quantity,
               original_consumption_date: returnData.original_consumption_date,
-              notes: returnData.notes,
+              notes: returnData.notes ? `${returnData.notes} (segment: ${returnData.segment_start}-${returnData.segment_end})` : `Segment: ${returnData.segment_start}-${returnData.segment_end}`,
               status: returnData.status,
-            })
-            .select()
-            .single()
-
-          if (insertError) {
+            }
+            const { data: fallbackData, error: fallbackError } = await supabase
+              .from('consumable_returns')
+              .insert(basicInsertData)
+              .select()
+              .single()
+            
+            if (fallbackError) throw fallbackError
+            returnRecord = fallbackData
+          } else if (insertError) {
             throw insertError
+          } else {
+            returnRecord = data
           }
 
           createdReturns.push(returnRecord)

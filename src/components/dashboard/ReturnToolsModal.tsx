@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { Html5QrcodeScanner } from 'html5-qrcode'
-import { Dialog } from '@/components/ui/Dialog'
-import { ModalHeader } from '@/components/shared/ModalHeader'
+import { TransitionDialog } from '@/components/ui/TransitionDialog'
 import { ShoppingCart } from 'lucide-react'
 import { VaultProvider, useVault } from '@/contexts/VaultContext'
 import { VaultModal } from '@/components/vault/VaultModal'
@@ -43,7 +42,7 @@ function ReturnToolsModalContent({
 
   // Vault integration
   const [showVault, setShowVault] = useState(false)
-  const { addItem, items: vaultItems, clearVault } = useVault()
+  const { addItem, items: vaultItems, clearVault, removeItem } = useVault()
   const [pendingTool, setPendingTool] = useState<ToolData & { loan_id: number } | null>(null)
 
   // Scanner lifecycle
@@ -211,27 +210,86 @@ function ReturnToolsModalContent({
 
     try {
       // Return all tools in parallel
-      const promises = vaultItems.map(item =>
-        fetch(`/api/loans/${item.loan_id}/return`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: JSON.stringify({
-            notes: 'Devuelto vía modal dashboard',
-          }),
-        })
-      )
+      const promises = vaultItems.map(async (item) => {
+        try {
+          const response = await fetch(`/api/loans/${item.loan_id}/return`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+            body: JSON.stringify({
+              notes: 'Devuelto vía modal dashboard',
+            }),
+          })
+          
+          // Parse response to get error details
+          const text = await response.text()
+          let data = {}
+          try {
+            data = text ? JSON.parse(text) : {}
+          } catch {
+            console.error('Failed to parse response:', text)
+          }
+          
+          return { 
+            response, 
+            item, 
+            data,
+            ok: response.ok,
+            statusText: response.statusText,
+          }
+        } catch (fetchError) {
+          console.error('Fetch error for loan', item.loan_id, fetchError)
+          return {
+            response: { ok: false, status: 0, statusText: 'Network Error' } as Response,
+            item,
+            data: { error: { message: 'Error de conexión' } } as Record<string, unknown>,
+            ok: false,
+            statusText: 'Network Error',
+          }
+        }
+      })
 
       const results = await Promise.all(promises)
-      const allSuccessful = results.every(res => res.ok)
+      const failedResults = results.filter(r => !r.ok)
+      const successResults = results.filter(r => r.ok)
 
-      if (!allSuccessful) {
-        const failedCount = results.filter(res => !res.ok).length
-        const errorMessage = `${failedCount} devoluciones fallaron`
-        toastError(errorMessage, 'Por favor, intenta de nuevo')
-        throw new Error(errorMessage)
+      if (failedResults.length > 0) {
+        // Log detailed errors
+        failedResults.forEach((result) => {
+          const { item, data, response, statusText } = result
+          const errorData = data as Record<string, unknown>
+          const errorObj = errorData?.error as Record<string, unknown> | undefined
+          
+          // Log all available info
+          console.error(`Failed to return loan ${item.loan_id}:`)
+          console.error('  - HTTP Status:', response?.status)
+          console.error('  - Status Text:', statusText || response?.statusText)
+          console.error('  - Response Data:', JSON.stringify(data))
+          console.error('  - Error Message:', errorObj?.message || errorData?.message || 'Unknown error')
+          console.error('  - Tool Name:', item.name)
+        })
+
+        // Remove successful items from vault
+        if (successResults.length > 0) {
+          successResults.forEach(({ item }) => {
+            removeItem(item.tool_id)
+          })
+          toastSuccess(`${successResults.length} herramientas devueltas exitosamente`)
+        }
+
+        // Show specific error message
+        const firstFailedData = failedResults[0]?.data as Record<string, unknown>
+        const firstErrorObj = firstFailedData?.error as Record<string, unknown> | undefined
+        const firstError = (firstErrorObj?.message as string) || (firstFailedData?.message as string) || `Error HTTP ${failedResults[0]?.response?.status}`
+        const errorMessage = failedResults.length === 1 
+          ? `Error: ${firstError}`
+          : `${failedResults.length} devoluciones fallaron. ${firstError}`
+        
+        setError(errorMessage)
+        toastError(errorMessage, 'Verifica el estado de los préstamos')
+        return // Don't close modal if there were failures
       }
 
       toastSuccess(`${vaultItems.length} herramientas devueltas exitosamente`)
@@ -265,11 +323,15 @@ function ReturnToolsModalContent({
 
   return (
     <>
-      <Dialog isOpen={isOpen} onClose={onClose} size="lg" showCloseButton={false}>
-        <ModalHeader
-          title="Devolver Herramientas"
-          onClose={onClose}
-        />
+      <TransitionDialog
+        open={isOpen}
+        onClose={onClose}
+        animationType="auto"
+        speed="normal"
+        enableHaptics={true}
+        className="!max-w-lg"
+        title="Devolver Herramientas"
+      >
 
         <div className="p-6">
           {/* Tool Modal */}
@@ -477,7 +539,7 @@ function ReturnToolsModalContent({
             </div>
           </div>
         )}
-      </Dialog>
+      </TransitionDialog>
 
       {/* Vault Modal */}
       <VaultModal

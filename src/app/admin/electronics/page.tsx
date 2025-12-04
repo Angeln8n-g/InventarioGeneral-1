@@ -7,12 +7,13 @@ import { useSelector, useDispatch } from 'react-redux'
 import type { RootState } from '@/app/store'
 import { loadFromStorage } from '@/features/auth/authSlice'
 import { ElectronicDeviceCard, ElectronicDeviceModal } from '@/components/electronics'
+import { EditElectronicDeviceModal } from '@/components/electronics/EditElectronicDeviceModal'
 import { BulkImportElectronics } from '@/components/admin/BulkImportElectronics'
-import { ElectronicDeviceWithDetails, ElectronicCategory } from '@/types/database'
+import { ElectronicDeviceWithDetails, ElectronicCategory, DeviceCategory } from '@/types/database'
 import { ElectronicDeviceFilters } from '@/types/electronics'
 import { useLanguage } from '@/contexts/LanguageContext'
-
-const ELECTRONIC_CATEGORIES: ElectronicCategory[] = ['Laptops', 'Tablets', 'Smartphones', 'Periféricos', 'Digitales', 'Otros']
+import { useCategoryIcons } from '@/hooks/useCategoryIcons'
+import { toastSuccess, toastError } from '@/lib/toast'
 
 const STATUS_OPTIONS = [
   { value: 'available', label: 'Available' },
@@ -32,11 +33,56 @@ export default function ElectronicsPage() {
   const [filters, setFilters] = useState<ElectronicDeviceFilters>({})
   const [selectedDevice, setSelectedDevice] = useState<ElectronicDeviceWithDetails | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  
+  // Fetch category icons for dynamic display
+  const { getIcon, categoriesMap } = useCategoryIcons()
+  
+  // State for dynamic categories
+  const [categories, setCategories] = useState<DeviceCategory[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
+  
+  // Helper to get category icon for a device
+  const getDeviceCategoryIcon = (device: ElectronicDeviceWithDetails): string | null => {
+    const category = (device.tool_instance as any)?.item_type?.category
+    if (!category) return null
+    const categoryData = categoriesMap.get(category)
+    return categoryData?.icon || null
+  }
 
   // Load token from localStorage on mount
   useEffect(() => {
     dispatch(loadFromStorage())
   }, [dispatch])
+
+  // Fetch categories for filter
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setLoadingCategories(true)
+        const storedToken = localStorage.getItem('token')
+        if (!storedToken) return
+        
+        const response = await fetch('/api/admin/categories', {
+          headers: {
+            'Authorization': `Bearer ${storedToken}`,
+          },
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          const activeCategories = (data.data || []).filter((cat: DeviceCategory) => cat.is_active)
+          setCategories(activeCategories)
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error)
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+
+    fetchCategories()
+  }, [])
 
   // Statistics
   const stats = {
@@ -103,7 +149,7 @@ export default function ElectronicsPage() {
       setDevices(result.data || [])
     } catch (error) {
       console.error('Error fetching devices:', error)
-      alert(error instanceof Error ? error.message : 'Failed to load devices')
+      toastError('Error al cargar dispositivos', error instanceof Error ? error.message : 'Failed to load devices')
     } finally {
       setLoading(false)
     }
@@ -111,6 +157,11 @@ export default function ElectronicsPage() {
 
   const handleDelete = async () => {
     if (!selectedDevice || !token) return
+
+    // Confirmation dialog for destructive action
+    if (!confirm('¿Estás seguro de que deseas eliminar este dispositivo? Esta acción no se puede deshacer.')) {
+      return
+    }
 
     try {
       setIsDeleting(true)
@@ -123,11 +174,12 @@ export default function ElectronicsPage() {
 
       if (!response.ok) throw new Error('Failed to delete device')
 
+      toastSuccess('Dispositivo eliminado', 'El dispositivo ha sido eliminado correctamente')
       setSelectedDevice(null)
       fetchDevices()
     } catch (error) {
       console.error('Error deleting device:', error)
-      alert('Failed to delete device')
+      toastError('Error al eliminar', error instanceof Error ? error.message : 'Failed to delete device')
     } finally {
       setIsDeleting(false)
     }
@@ -135,7 +187,7 @@ export default function ElectronicsPage() {
 
   const handleEdit = () => {
     if (selectedDevice) {
-      router.push(`/admin/electronics/${selectedDevice.id}`)
+      setShowEditModal(true)
     }
   }
 
@@ -264,10 +316,13 @@ export default function ElectronicsPage() {
                 value={filters.category || ''}
                 onChange={(e) => setFilters({ ...filters, category: e.target.value as ElectronicCategory || undefined })}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+                disabled={loadingCategories}
               >
                 <option value="">All Categories</option>
-                {ELECTRONIC_CATEGORIES.map(category => (
-                  <option key={category} value={category}>{category}</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.name}>
+                    {category.icon ? `${category.icon} ` : ''}{category.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -380,6 +435,7 @@ export default function ElectronicsPage() {
               <ElectronicDeviceCard
                 key={device.id}
                 device={device}
+                categoryIcon={getDeviceCategoryIcon(device)}
                 onViewDetails={() => setSelectedDevice(device)}
               />
             ))}
@@ -391,10 +447,19 @@ export default function ElectronicsPage() {
       {selectedDevice && (
         <ElectronicDeviceModal
           device={selectedDevice}
+          categoryIcon={getDeviceCategoryIcon(selectedDevice)}
           onClose={() => setSelectedDevice(null)}
           onEdit={handleEdit}
           onDelete={handleDelete}
           isDeleting={isDeleting}
+        />
+      )}
+      {selectedDevice && showEditModal && (
+        <EditElectronicDeviceModal
+          device={selectedDevice}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={fetchDevices}
         />
       )}
     </div>

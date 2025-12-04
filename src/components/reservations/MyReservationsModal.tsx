@@ -367,9 +367,9 @@ export function MyReservationsModal({ isOpen, onClose, userId }: MyReservationsM
               </p>
             </div>
           ) : (
-            filteredReservations.map((reservation) => (
+            filteredReservations.map((reservation, index) => (
               <div
-                key={reservation.id}
+                key={`${reservation.id}-${reservation.item_type_id}-${index}`}
                 className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start justify-between mb-3">
