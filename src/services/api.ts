@@ -345,6 +345,7 @@ export const api = createApi({
         totalTools: number
         availableTools: number
         loanedTools: number
+        maintenanceTools: number
         overdueLoans: number
         totalUsers: number
         activeLoans: number
@@ -352,6 +353,8 @@ export const api = createApi({
         totalConsumables: number
         lowStockItems: number
         totalElectronics: number
+        toolsByCategory: Array<{ category: string; count: number }>
+        consumablesByCategory: Array<{ category: string; count: number }>
       }
     }, void>({
       query: () => '/admin/dashboard/stats',
@@ -438,6 +441,8 @@ export const api = createApi({
         daysUntilEmpty: number | null
         unitOfMeasure: string
         category?: string
+        totalConsumed: number
+        avgDailyConsumption: number
       }>},
       void
     >({

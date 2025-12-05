@@ -32,8 +32,9 @@ export async function GET(request: NextRequest) {
 
       if (consumptionError) throw consumptionError
 
-      // Calculate average daily consumption per item
+      // Calculate average daily consumption and total consumed per item
       const avgConsumption: Record<number, number> = {}
+      const totalConsumed: Record<number, number> = {}
       const consumptionByItem: Record<number, number[]> = {}
 
       consumptionData?.forEach((item) => {
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest) {
         const quantities = consumptionByItem[Number(itemId)]
         const total = quantities.reduce((sum, q) => sum + q, 0)
         avgConsumption[Number(itemId)] = total / 30
+        totalConsumed[Number(itemId)] = total
       })
 
       // Build inventory items with status
@@ -77,6 +79,8 @@ export async function GET(request: NextRequest) {
           daysUntilEmpty,
           unitOfMeasure: stock.unit_of_measure || 'unidades',
           category: stock.item_types.category,
+          totalConsumed: totalConsumed[stock.item_types.id] || 0,
+          avgDailyConsumption: avgDaily,
         }
       })
 

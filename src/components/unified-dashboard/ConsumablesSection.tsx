@@ -1,5 +1,6 @@
 'use client'
 
+// Updated: Added totalConsumed column and fixed charts - v2
 import React, { useState, useMemo } from 'react'
 import { EnhancedMetricCard } from './EnhancedMetricCard'
 import { UnifiedChart } from './UnifiedChart'
@@ -27,6 +28,8 @@ interface ConsumableDetail {
   minimumThreshold: number
   unitOfMeasure: string
   status: 'critical' | 'low' | 'normal' | 'high'
+  totalConsumed: number
+  avgDailyConsumption: number
 }
 
 // Icons
@@ -113,25 +116,41 @@ export function ConsumablesSection({
     },
   ], [summary])
 
-  // Consumption trend chart data
+  // Consumption trend chart data - generate from consumables data if no trend provided
   const trendChartData: ChartData = useMemo(() => {
-    if (!consumptionTrend) {
+    if (consumptionTrend) {
       return {
-        labels: [],
+        labels: consumptionTrend.labels,
+        datasets: consumptionTrend.datasets.map(ds => ({
+          label: ds.label,
+          data: ds.data,
+        })),
+      }
+    }
+    
+    // Generate trend from consumables data - top 5 by consumption
+    const topConsumed = [...consumablesData]
+      .sort((a, b) => b.totalConsumed - a.totalConsumed)
+      .slice(0, 5)
+    
+    if (topConsumed.length === 0) {
+      return {
+        labels: ['Sin datos'],
         datasets: [{
           label: 'Consumo',
-          data: [],
+          data: [0],
         }],
       }
     }
+    
     return {
-      labels: consumptionTrend.labels,
-      datasets: consumptionTrend.datasets.map(ds => ({
-        label: ds.label,
-        data: ds.data,
-      })),
+      labels: topConsumed.map(c => c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name),
+      datasets: [{
+        label: 'Consumido (últimos 30 días)',
+        data: topConsumed.map(c => c.totalConsumed),
+      }],
     }
-  }, [consumptionTrend])
+  }, [consumptionTrend, consumablesData])
 
   // Category distribution chart data
   const categoryChartData: ChartData = useMemo(() => {
@@ -155,6 +174,16 @@ export function ConsumablesSection({
       sortable: true,
       render: (value, row) => (
         <span className="font-medium">
+          {value as number} {row.unitOfMeasure}
+        </span>
+      ),
+    },
+    { 
+      key: 'totalConsumed', 
+      header: 'Consumido (30d)', 
+      sortable: true,
+      render: (value, row) => (
+        <span className="text-orange-600 dark:text-orange-400 font-medium">
           {value as number} {row.unitOfMeasure}
         </span>
       ),
@@ -255,19 +284,19 @@ export function ConsumablesSection({
         ))}
       </div>
 
-      {/* Charts Row */}
+      {/* Charts Row - Updated */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <UnifiedChart
-          type="line"
+          type="bar"
           data={trendChartData}
-          title="Tendencia de Consumo"
+          title="Top Consumibles Más Usados"
           loading={loading}
           height={280}
         />
         <UnifiedChart
-          type="pie"
+          type="doughnut"
           data={categoryChartData}
-          title="Distribución por Categoría"
+          title="Por Categoría"
           loading={loading}
           height={280}
         />

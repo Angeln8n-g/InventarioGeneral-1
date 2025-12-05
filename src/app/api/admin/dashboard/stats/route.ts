@@ -88,11 +88,60 @@ export async function GET(request: NextRequest) {
 
       if (electronicsError) throw electronicsError
 
+      // Get tools by category
+      const { data: toolsByCategory, error: toolsByCategoryError } = await supabase
+        .from('tool_instances')
+        .select(`
+          item_type:item_types(category)
+        `)
+
+      if (toolsByCategoryError) throw toolsByCategoryError
+
+      // Group tools by category
+      const toolsCategoryCount: Record<string, number> = {}
+      toolsByCategory?.forEach(tool => {
+        const category = (tool.item_type as { category?: string })?.category || 'Sin categoría'
+        toolsCategoryCount[category] = (toolsCategoryCount[category] || 0) + 1
+      })
+      const toolsByCategories = Object.entries(toolsCategoryCount).map(([category, count]) => ({
+        category,
+        count,
+      }))
+
+      // Get consumables by category
+      const { data: consumablesByCategory, error: consumablesByCategoryError } = await supabase
+        .from('consumable_stock')
+        .select(`
+          item_type:item_types(category)
+        `)
+
+      if (consumablesByCategoryError) throw consumablesByCategoryError
+
+      // Group consumables by category
+      const consumablesCategoryCount: Record<string, number> = {}
+      consumablesByCategory?.forEach(item => {
+        const category = (item.item_type as { category?: string })?.category || 'Sin categoría'
+        consumablesCategoryCount[category] = (consumablesCategoryCount[category] || 0) + 1
+      })
+      const consumablesByCategories = Object.entries(consumablesCategoryCount).map(([category, count]) => ({
+        category,
+        count,
+      }))
+
+      // Get maintenance tools count
+      const { count: maintenanceTools, error: maintenanceError } = await supabase
+        .from('tool_instances')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['maintenance', 'out-of-service', 'damaged'])
+
+      if (maintenanceError) throw maintenanceError
+
       return NextResponse.json({
         data: {
           totalTools: totalTools || 0,
           availableTools: availableTools || 0,
           loanedTools: loanedTools || 0,
+          maintenanceTools: maintenanceTools || 0,
           overdueLoans: overdueLoans || 0,
           totalUsers: totalUsers || 0,
           activeLoans: activeLoans || 0,
@@ -100,6 +149,8 @@ export async function GET(request: NextRequest) {
           totalConsumables: totalConsumables || 0,
           lowStockItems,
           totalElectronics: totalElectronics || 0,
+          toolsByCategory: toolsByCategories,
+          consumablesByCategory: consumablesByCategories,
         },
         message: 'Dashboard stats retrieved successfully',
       })

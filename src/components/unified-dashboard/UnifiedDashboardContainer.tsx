@@ -1,5 +1,6 @@
 'use client'
 
+// Updated: consumablesDetailData now includes totalConsumed - v2
 import React, { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
@@ -265,6 +266,8 @@ export function UnifiedDashboardContainer({ initialSection = 'overview' }: Unifi
       minimumThreshold: item.minimumThreshold,
       unitOfMeasure: item.unitOfMeasure,
       status: item.status,
+      totalConsumed: item.totalConsumed || 0,
+      avgDailyConsumption: item.avgDailyConsumption || 0,
     }))
   }, [inventoryData])
 
@@ -422,14 +425,14 @@ export function UnifiedDashboardContainer({ initialSection = 'overview' }: Unifi
       total: statsData.data.totalTools,
       available: statsData.data.availableTools,
       loaned: statsData.data.loanedTools,
-      maintenance: 0,
-      byCategory: [],
+      maintenance: statsData.data.maintenanceTools || 0,
+      byCategory: statsData.data.toolsByCategory || [],
     },
     consumables: {
       totalTypes: statsData.data.consumableTypes,
       totalStock: statsData.data.totalConsumables,
       lowStockCount: statsData.data.lowStockItems,
-      byCategory: [],
+      byCategory: statsData.data.consumablesByCategory || [],
     },
     loans: {
       active: statsData.data.activeLoans,
