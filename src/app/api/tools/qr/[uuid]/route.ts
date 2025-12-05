@@ -3,6 +3,7 @@ import { toolInstanceOperations, auditLogOperations } from '@/lib/supabase-clien
 import { withAuth } from '@/lib/auth-middleware'
 import { isValidUUID } from '@/lib/supabase-client'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
+import { supabase } from '@/lib/supabase'
 
 export async function GET(
   request: NextRequest,
@@ -59,12 +60,38 @@ export async function GET(
         // Don't fail the request if audit logging fails
       }
 
+      // If tool is loaned, get active loan information
+      let activeLoan = null
+      if (tool.status === 'loaned') {
+        const { data: loanData } = await supabase
+          .from('loans')
+          .select(`
+            id,
+            loan_date,
+            due_date,
+            user:users(id, username, email)
+          `)
+          .eq('tool_instance_id', tool.id)
+          .eq('status', 'active')
+          .single()
+        
+        if (loanData) {
+          activeLoan = {
+            id: loanData.id,
+            loan_date: loanData.loan_date,
+            due_date: loanData.due_date,
+            user: loanData.user,
+          }
+        }
+      }
+
       // Return tool information with availability status
       return NextResponse.json({
         data: {
           ...tool,
           is_available: tool.status === 'available',
           can_be_loaned: tool.status === 'available',
+          active_loan: activeLoan,
         },
         message: 'Tool found successfully',
       })

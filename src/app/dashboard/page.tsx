@@ -2,7 +2,6 @@
 
 import React, { useState, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { useAuth } from '@/hooks/useAuth'
 import { useGetMyLoansQuery, useGetNotificationsQuery } from '@/services/api'
@@ -32,7 +31,7 @@ export default function DashboardPage() {
   const [isReturnToolsModalOpen, setIsReturnToolsModalOpen] = useState(false)
   
   // View transitions for navigation
-  const { startTransition } = useViewTransition({
+  useViewTransition({
     speed: 'normal',
     direction: 'forward',
     enableHaptics: true,
@@ -121,13 +120,10 @@ export default function DashboardPage() {
         <div className="min-h-screen relative pb-20">
         {/* Background Image */}
         <div className="fixed inset-0 z-0">
-          <Image
+          <img 
             src="/images/dashboard-background.jpg"
-            alt="Dashboard background"
-            fill
-            priority
-            quality={90}
-            className="object-cover"
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
           />
           {/* Overlay for better readability */}
           <div className="absolute inset-0 bg-white/40 dark:bg-black/50" />
