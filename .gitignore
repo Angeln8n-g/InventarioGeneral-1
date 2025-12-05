@@ -56,7 +56,7 @@ Thumbs.db
 .DS_Store
 
 # Logs
-logs/
+/logs/
 *.log
 
 # Temporary files
