@@ -1480,8 +1480,11 @@ export const classroomOperations = {
       .insert({
         name: input.name,
         location: input.location,
+        building: input.building || null,
+        floor: input.floor || null,
         status: input.status,
         description: input.description || null,
+        responsible_person: input.responsible_person || null,
       })
       .select('*')
       .single()

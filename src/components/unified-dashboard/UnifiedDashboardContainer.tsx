@@ -32,6 +32,7 @@ import {
   useUpdateMaintenanceReportMutation,
   useGetDeviceMovementHistoryQuery,
   useCreateDeviceMovementMutation,
+  useGetAvailableToolsQuery,
 } from '@/services/api'
 import type {
   DashboardSection,
@@ -148,6 +149,7 @@ export function UnifiedDashboardContainer({ initialSection = 'overview' }: Unifi
   const { data: combinationsData, isLoading: combinationsLoading } = useGetDeviceCombinationsQuery()
   const { data: maintenanceData, isLoading: maintenanceLoading, refetch: refetchMaintenance } = useGetMaintenanceReportsQuery({})
   const { data: movementsData, isLoading: movementsLoading, refetch: refetchMovements } = useGetDeviceMovementHistoryQuery({})
+  const { data: toolsData, isLoading: toolsLoading } = useGetAvailableToolsQuery()
   const [createMaintenanceReport] = useCreateMaintenanceReportMutation()
   const [updateMaintenanceReport] = useUpdateMaintenanceReportMutation()
   const [createDeviceMovement] = useCreateDeviceMovementMutation()
@@ -275,6 +277,30 @@ export function UnifiedDashboardContainer({ initialSection = 'overview' }: Unifi
   }, [electronicsData])
 
   // Transform consumables data for the ConsumablesSection
+  // Transform tools data for the ToolsSection
+  const toolsDetailData = React.useMemo(() => {
+    if (!toolsData?.data) return []
+    
+    // Get loaned counts from active loans
+    const loanedByType: Record<number, number> = {}
+    loansData?.data?.forEach(loan => {
+      const typeId = loan.tool_instance?.item_type?.id
+      if (typeId && !loan.return_date) {
+        loanedByType[typeId] = (loanedByType[typeId] || 0) + 1
+      }
+    })
+    
+    return toolsData.data.map(tool => ({
+      id: tool.item_type_id,
+      name: tool.name,
+      category: tool.category || 'Sin categoría',
+      status: tool.available_count > 0 ? 'Disponible' : 'Sin stock',
+      totalInstances: tool.available_count + (loanedByType[tool.item_type_id] || 0),
+      availableInstances: tool.available_count,
+      loanedInstances: loanedByType[tool.item_type_id] || 0,
+    }))
+  }, [toolsData, loansData])
+
   const consumablesDetailData = React.useMemo(() => {
     if (!inventoryData?.data) return []
     
@@ -533,7 +559,8 @@ export function UnifiedDashboardContainer({ initialSection = 'overview' }: Unifi
           <ToolsSection 
             filters={filters} 
             summary={dashboardSummary?.tools}
-            loading={statsLoading}
+            toolsData={toolsDetailData}
+            loading={statsLoading || toolsLoading}
             onDrillDown={handleDrillDown} 
           />
         )

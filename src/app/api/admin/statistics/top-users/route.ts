@@ -30,23 +30,40 @@ export async function GET(request: NextRequest) {
 
       if (loansError) throw loansError
 
-      // Also get ALL active loans (regardless of date) to show current active loans
+      // Get ALL current active loans (active or overdue, not returned)
       const { data: activeLoans, error: activeLoansError } = await supabase
         .from('loans')
-        .select('user_id')
-        .eq('status', 'active')
+        .select('user_id, status')
+        .in('status', ['active', 'overdue'])
 
       if (activeLoansError) throw activeLoansError
 
-      // Get consumables per user
-      const { data: consumables, error: consumablesError } = await supabase
+      // Get consumables per user - include all fulfilled requests
+      // First try with date filter, then get all fulfilled if no results
+      let consumables: { user_id: number; fulfilled_quantity: number }[] | null = null
+      
+      const { data: consumablesWithDate, error: consumablesDateError } = await supabase
         .from('consumable_requests')
         .select('user_id, fulfilled_quantity')
         .eq('status', 'fulfilled')
+        .not('fulfilled_date', 'is', null)
         .gte('fulfilled_date', start)
         .lte('fulfilled_date', end)
 
-      if (consumablesError) throw consumablesError
+      if (consumablesDateError) throw consumablesDateError
+      
+      // Also get fulfilled consumables without date filter (for records where fulfilled_date might be null)
+      const { data: allFulfilledConsumables, error: allConsumablesError } = await supabase
+        .from('consumable_requests')
+        .select('user_id, fulfilled_quantity')
+        .eq('status', 'fulfilled')
+
+      if (allConsumablesError) throw allConsumablesError
+      
+      // Use consumables with date if available, otherwise use all fulfilled
+      consumables = (consumablesWithDate && consumablesWithDate.length > 0) 
+        ? consumablesWithDate 
+        : allFulfilledConsumables
 
       // Aggregate data per user
       const userStats: Record<number, any> = {}

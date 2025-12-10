@@ -13,6 +13,8 @@ export const ClassroomForm: React.FC<ClassroomFormProps> = ({ initial, onSubmit,
   const [formData, setFormData] = useState<CreateClassroomInput>({
     name: initial?.name || '',
     location: initial?.location || '',
+    building: initial?.building || '',
+    floor: initial?.floor || '',
     status: (initial?.status as any) || 'active',
     description: initial?.description || '',
     responsible_person: initial?.responsible_person || '',
@@ -58,9 +60,31 @@ export const ClassroomForm: React.FC<ClassroomFormProps> = ({ initial, onSubmit,
           type="text"
           value={formData.location}
           onChange={(e) => handleChange('location', e.target.value)}
-          className={`w-full border ${errors.location ? 'border-claro-red' : 'border-gray-300'} rounded-lg px-3 py-2 text-sm`}
+          className={`w-full border ${errors.location ? 'border-claro-red' : 'border-gray-300'} dark:border-gray-600 bg-card-light dark:bg-card-dark rounded-lg px-3 py-2 text-sm`}
         />
         {errors.location && <p className="mt-1 text-xs text-claro-red">{errors.location}</p>}
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium">Edificio</label>
+          <input
+            type="text"
+            value={formData.building || ''}
+            onChange={(e) => handleChange('building', e.target.value)}
+            placeholder="Ej: Edificio Principal"
+            className="w-full border border-gray-300 dark:border-gray-600 bg-card-light dark:bg-card-dark rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Piso</label>
+          <input
+            type="text"
+            value={formData.floor || ''}
+            onChange={(e) => handleChange('floor', e.target.value)}
+            placeholder="Ej: 2do Piso"
+            className="w-full border border-gray-300 dark:border-gray-600 bg-card-light dark:bg-card-dark rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
       </div>
       <div>
         <label className="block text-sm font-medium">Estatus</label>

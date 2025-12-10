@@ -6,6 +6,8 @@ export interface Classroom {
   id: number
   name: string
   location: string
+  building?: string
+  floor?: string
   status: ClassroomStatus
   description?: string
   responsible_person?: string
@@ -17,6 +19,8 @@ export interface Classroom {
 export interface CreateClassroomInput {
   name: string
   location: string
+  building?: string
+  floor?: string
   status: ClassroomStatus
   description?: string
   responsible_person?: string
@@ -25,6 +29,8 @@ export interface CreateClassroomInput {
 export interface UpdateClassroomInput {
   name?: string
   location?: string
+  building?: string
+  floor?: string
   status?: ClassroomStatus
   description?: string
   responsible_person?: string
