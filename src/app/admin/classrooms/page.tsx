@@ -7,6 +7,7 @@ import { useSelector } from 'react-redux'
 import { RootState } from '@/app/store'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { ErrorBoundary, ErrorMessage } from '@/components/ui/ErrorBoundary'
+import { Calendar } from 'lucide-react'
 
 interface ClassroomItem {
   id: number
@@ -15,6 +16,8 @@ interface ClassroomItem {
   status: string
   device_count: number
   responsible_person?: string
+  is_reserved?: boolean
+  current_reservation?: string
 }
 
 function ClassroomsPageContent() {
@@ -95,7 +98,16 @@ function ClassroomsPageContent() {
               <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">Gestión de aulas y equipos asignados</p>
             </div>
           </div>
-          <Link href="/admin/classrooms/new" className="claro-button-primary text-white px-4 py-2 rounded-lg text-sm font-medium">Crear Aula</Link>
+          <div className="flex gap-2">
+            <Link 
+              href="/admin/classrooms/calendar" 
+              className="flex items-center gap-2 claro-button-secondary px-4 py-2 rounded-lg text-sm font-medium"
+            >
+              <Calendar className="w-4 h-4" />
+              Calendario
+            </Link>
+            <Link href="/admin/classrooms/new" className="claro-button-primary text-white px-4 py-2 rounded-lg text-sm font-medium">Crear Aula</Link>
+          </div>
         </div>
 
         <div className="bg-card-light dark:bg-card-dark rounded-lg p-4 mb-4 border border-gray-200 dark:border-gray-700">
@@ -139,6 +151,7 @@ function ClassroomsPageContent() {
                   <th className="px-4 py-2 text-left">Localidad</th>
                   <th className="px-4 py-2 text-left">Responsable</th>
                   <th className="px-4 py-2 text-left">Estatus</th>
+                  <th className="px-4 py-2 text-left">Disponibilidad</th>
                   <th className="px-4 py-2 text-left">Dispositivos</th>
                   <th className="px-4 py-2 text-left">Acciones</th>
                 </tr>
@@ -146,7 +159,7 @@ function ClassroomsPageContent() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-text-secondary-light dark:text-text-secondary-dark">
+                    <td colSpan={7} className="px-4 py-8 text-center text-text-secondary-light dark:text-text-secondary-dark">
                       {items.length === 0 ? 'No hay aulas registradas' : 'No se encontraron aulas con los filtros aplicados'}
                     </td>
                   </tr>
@@ -166,6 +179,17 @@ function ClassroomsPageContent() {
                         }`}>
                           {i.status}
                         </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        {i.is_reserved ? (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" title={i.current_reservation}>
+                            🔴 Reservada
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                            🟢 Disponible
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2">{i.device_count}</td>
                       <td className="px-4 py-2">

@@ -88,6 +88,13 @@ export interface ClassroomsSummary {
   total: number;
   withDevices: number;
   totalAssignments: number;
+  // Reservation metrics
+  totalReservations: number;
+  activeReservations: number;
+  reservedNow: number;
+  availableNow: number;
+  reservationsThisMonth: number;
+  internetServices: number;
 }
 
 export interface UsersSummary {

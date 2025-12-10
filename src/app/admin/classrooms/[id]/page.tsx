@@ -2,12 +2,13 @@
 
 import React, { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { ClassroomForm } from '@/components/classrooms/ClassroomForm'
+import { ClassroomForm, ClassroomReservationModal, InternetServicesModal } from '@/components/classrooms'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/app/store'
 import { toastSuccess, toastError } from '@/lib/toast'
+import { Calendar, Wifi } from 'lucide-react'
 
 interface ClassroomItem { id: number; name: string; location: string; status: 'active' | 'inactive' | 'maintenance'; description?: string; responsible_person?: string; device_count: number }
 interface AssignmentItem { id: number; electronic_device_id: number; is_active: boolean; assigned_date: string; removed_date?: string; assigned_by_user?: { username: string } ; removed_by_user?: { username: string }; device: { tool_instance: { item_type: { name: string }, serial_number: string | null } } }
@@ -24,6 +25,8 @@ export default function ClassroomDetailPage({ params }: { params: Promise<{ id: 
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showReservations, setShowReservations] = useState(false)
+  const [showInternetServices, setShowInternetServices] = useState(false)
 
   const load = async () => {
     if (!token) return
@@ -118,6 +121,20 @@ export default function ClassroomDetailPage({ params }: { params: Promise<{ id: 
           <h1 className="text-2xl font-bold">{item.name}</h1>
         </div>
         <div className="flex gap-2">
+          <button 
+            onClick={() => setShowInternetServices(true)} 
+            className="flex items-center gap-2 claro-button-secondary px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            <Wifi className="w-4 h-4" />
+            Internet
+          </button>
+          <button 
+            onClick={() => setShowReservations(true)} 
+            className="flex items-center gap-2 claro-button-secondary px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            <Calendar className="w-4 h-4" />
+            Reservas
+          </button>
           <button onClick={() => setEditing(true)} className="claro-button-primary text-white px-4 py-2 rounded-lg text-sm font-medium">Editar</button>
           <button onClick={handleDelete} disabled={item.device_count>0} className="bg-claro-red text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">Eliminar</button>
         </div>
@@ -204,6 +221,24 @@ export default function ClassroomDetailPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
       )}
+
+      {/* Reservation Modal */}
+      <ClassroomReservationModal
+        isOpen={showReservations}
+        onClose={() => setShowReservations(false)}
+        classroomId={classroomId}
+        classroomName={item.name}
+        token={token}
+      />
+
+      {/* Internet Services Modal */}
+      <InternetServicesModal
+        isOpen={showInternetServices}
+        onClose={() => setShowInternetServices(false)}
+        classroomId={classroomId}
+        classroomName={item.name}
+        token={token}
+      />
     </div>
     </ProtectedRoute>
   )

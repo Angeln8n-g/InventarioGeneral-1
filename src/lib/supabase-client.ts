@@ -1489,13 +1489,14 @@ export const classroomOperations = {
     return data
   },
 
-  async getAll(): Promise<ClassroomWithDeviceCount[]> {
+  async getAll(): Promise<(ClassroomWithDeviceCount & { is_reserved: boolean; current_reservation?: string })[]> {
     const { data, error } = await supabase
       .from('classrooms')
       .select('*')
       .order('name', { ascending: true })
     if (error) throw error
     const classrooms = data || []
+    
     // Compute device counts
     const { data: assignments } = await supabase
       .from('device_assignments')
@@ -1505,7 +1506,70 @@ export const classroomOperations = {
       acc[a.classroom_id] = (acc[a.classroom_id] || 0) + 1
       return acc
     }, {})
-    return classrooms.map(c => ({ ...c, device_count: counts[c.id] || 0 }))
+    
+    // Check current reservations
+    const now = new Date().toISOString()
+    const { data: reservations } = await supabase
+      .from('classroom_reservations')
+      .select('classroom_id, title')
+      .lte('start_datetime', now)
+      .gte('end_datetime', now)
+      .in('status', ['pending', 'confirmed'])
+    
+    const reservedMap: Record<number, string> = {}
+    ;(reservations || []).forEach((r: any) => {
+      reservedMap[r.classroom_id] = r.title
+    })
+    
+    return classrooms.map(c => ({ 
+      ...c, 
+      device_count: counts[c.id] || 0,
+      is_reserved: !!reservedMap[c.id],
+      current_reservation: reservedMap[c.id]
+    }))
+  },
+
+  async getStats(): Promise<{
+    totalReservations: number
+    activeReservations: number
+    reservationsThisMonth: number
+    internetServicesCount: number
+  }> {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
+
+    // Total reservations
+    const { count: totalReservations } = await supabase
+      .from('classroom_reservations')
+      .select('*', { count: 'exact', head: true })
+
+    // Active reservations (pending or confirmed, not expired)
+    const { count: activeReservations } = await supabase
+      .from('classroom_reservations')
+      .select('*', { count: 'exact', head: true })
+      .in('status', ['pending', 'confirmed'])
+      .gte('end_datetime', now.toISOString())
+
+    // Reservations this month
+    const { count: reservationsThisMonth } = await supabase
+      .from('classroom_reservations')
+      .select('*', { count: 'exact', head: true })
+      .gte('start_datetime', startOfMonth)
+      .lte('start_datetime', endOfMonth)
+
+    // Internet services count
+    const { count: internetServicesCount } = await supabase
+      .from('classroom_internet_services')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active')
+
+    return {
+      totalReservations: totalReservations || 0,
+      activeReservations: activeReservations || 0,
+      reservationsThisMonth: reservationsThisMonth || 0,
+      internetServicesCount: internetServicesCount || 0,
+    }
   },
 
   async getById(id: number): Promise<ClassroomWithDeviceCount | null> {
@@ -1762,4 +1826,175 @@ export const combinationOperations = {
     if (error) throw error
     return data as unknown as DeviceCombination
   },
+}
+
+// Classroom reservation operations
+import type { 
+  ClassroomReservation, 
+  ClassroomReservationWithDetails, 
+  CreateClassroomReservationInput, 
+  UpdateClassroomReservationInput 
+} from '@/types/classrooms'
+
+export const classroomReservationOperations = {
+  async create(input: CreateClassroomReservationInput, userId: number): Promise<ClassroomReservation> {
+    // Check for overlapping reservations
+    const { data: existing } = await supabase
+      .from('classroom_reservations')
+      .select('id')
+      .eq('classroom_id', input.classroom_id)
+      .neq('status', 'cancelled')
+      .or(`and(start_datetime.lt.${input.end_datetime},end_datetime.gt.${input.start_datetime})`)
+    
+    if (existing && existing.length > 0) {
+      const err: any = new Error('Ya existe una reserva en ese horario')
+      err.code = 'OVERLAPPING_RESERVATION'
+      throw err
+    }
+
+    const { data, error } = await supabase
+      .from('classroom_reservations')
+      .insert({
+        classroom_id: input.classroom_id,
+        user_id: userId,
+        title: input.title,
+        description: input.description || null,
+        start_datetime: input.start_datetime,
+        end_datetime: input.end_datetime,
+        attendees_count: input.attendees_count || null,
+        status: 'pending'
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async getByClassroom(classroomId: number): Promise<ClassroomReservationWithDetails[]> {
+    const { data, error } = await supabase
+      .from('classroom_reservations')
+      .select(`
+        *,
+        classroom:classrooms(name, location),
+        user:users(username, email)
+      `)
+      .eq('classroom_id', classroomId)
+      .order('start_datetime', { ascending: true })
+    if (error) throw error
+    return (data || []).map((r: any) => ({
+      ...r,
+      classroom_name: r.classroom?.name,
+      classroom_location: r.classroom?.location,
+      username: r.user?.username,
+      user_email: r.user?.email
+    }))
+  },
+
+  async getById(id: number): Promise<ClassroomReservationWithDetails | null> {
+    const { data, error } = await supabase
+      .from('classroom_reservations')
+      .select(`
+        *,
+        classroom:classrooms(name, location),
+        user:users(username, email)
+      `)
+      .eq('id', id)
+      .single()
+    if (error && error.code !== 'PGRST116') throw error
+    if (!data) return null
+    return {
+      ...data,
+      classroom_name: data.classroom?.name,
+      classroom_location: data.classroom?.location,
+      username: data.user?.username,
+      user_email: data.user?.email
+    } as ClassroomReservationWithDetails
+  },
+
+  async update(id: number, input: UpdateClassroomReservationInput): Promise<ClassroomReservation> {
+    const { data, error } = await supabase
+      .from('classroom_reservations')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async delete(id: number): Promise<void> {
+    const { error } = await supabase
+      .from('classroom_reservations')
+      .delete()
+      .eq('id', id)
+    if (error) throw error
+  }
+}
+
+// Classroom internet service operations
+import type { 
+  ClassroomInternetService, 
+  CreateInternetServiceInput, 
+  UpdateInternetServiceInput 
+} from '@/types/classrooms'
+
+export const internetServiceOperations = {
+  async create(input: CreateInternetServiceInput, userId?: number): Promise<ClassroomInternetService> {
+    const { data, error } = await supabase
+      .from('classroom_internet_services')
+      .insert({
+        ...input,
+        created_by: userId || null,
+        status: input.status || 'active'
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async getByClassroom(classroomId: number): Promise<ClassroomInternetService[]> {
+    const { data, error } = await supabase
+      .from('classroom_internet_services')
+      .select('*')
+      .eq('classroom_id', classroomId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  },
+
+  async getById(id: number): Promise<ClassroomInternetService | null> {
+    const { data, error } = await supabase
+      .from('classroom_internet_services')
+      .select('*')
+      .eq('id', id)
+      .single()
+    if (error && error.code !== 'PGRST116') throw error
+    return data || null
+  },
+
+  async update(id: number, input: UpdateInternetServiceInput): Promise<ClassroomInternetService> {
+    const { data, error } = await supabase
+      .from('classroom_internet_services')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async delete(id: number): Promise<void> {
+    const { error } = await supabase
+      .from('classroom_internet_services')
+      .delete()
+      .eq('id', id)
+    if (error) throw error
+  }
 }

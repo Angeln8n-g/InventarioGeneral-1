@@ -155,3 +155,159 @@ export async function validateDeviceCombination(
   return { isValid: errors.length === 0, errors }
 }
 
+// Classroom Reservation Types
+export type ClassroomReservationStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed'
+
+export interface ClassroomReservation {
+  id: number
+  classroom_id: number
+  user_id: number
+  title: string
+  description?: string
+  start_datetime: string
+  end_datetime: string
+  status: ClassroomReservationStatus
+  attendees_count?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ClassroomReservationWithDetails extends ClassroomReservation {
+  classroom_name: string
+  classroom_location: string
+  username: string
+  user_email?: string
+}
+
+export interface CreateClassroomReservationInput {
+  classroom_id: number
+  title: string
+  description?: string
+  start_datetime: string
+  end_datetime: string
+  attendees_count?: number
+}
+
+export interface UpdateClassroomReservationInput {
+  title?: string
+  description?: string
+  start_datetime?: string
+  end_datetime?: string
+  status?: ClassroomReservationStatus
+  attendees_count?: number
+}
+
+// Internet Service Types
+export type InternetServiceType = 'fiber' | 'cable' | 'dsl' | 'wireless' | 'satellite' | 'other'
+export type InternetServiceStatus = 'active' | 'inactive' | 'suspended'
+
+export interface ClassroomInternetService {
+  id: number
+  classroom_id: number
+  service_provider: string
+  service_type: InternetServiceType
+  plan_name?: string
+  download_speed?: number
+  upload_speed?: number
+  account_number?: string
+  ip_address?: string
+  router_model?: string
+  router_serial?: string
+  installation_date?: string
+  contract_end_date?: string
+  monthly_cost?: number
+  status: InternetServiceStatus
+  notes?: string
+  created_by?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateInternetServiceInput {
+  classroom_id: number
+  service_provider: string
+  service_type: InternetServiceType
+  plan_name?: string
+  download_speed?: number
+  upload_speed?: number
+  account_number?: string
+  ip_address?: string
+  router_model?: string
+  router_serial?: string
+  installation_date?: string
+  contract_end_date?: string
+  monthly_cost?: number
+  status?: InternetServiceStatus
+  notes?: string
+}
+
+export interface UpdateInternetServiceInput {
+  service_provider?: string
+  service_type?: InternetServiceType
+  plan_name?: string
+  download_speed?: number
+  upload_speed?: number
+  account_number?: string
+  ip_address?: string
+  router_model?: string
+  router_serial?: string
+  installation_date?: string
+  contract_end_date?: string
+  monthly_cost?: number
+  status?: InternetServiceStatus
+  notes?: string
+}
+
+export function validateInternetServiceInput(input: Record<string, unknown>): ValidationResult {
+  const errors: ValidationError[] = []
+
+  if (!input.service_provider || typeof input.service_provider !== 'string' || input.service_provider.trim().length === 0) {
+    errors.push({ field: 'service_provider', message: 'El proveedor es requerido', code: 'REQUIRED_FIELD' })
+  }
+
+  const validTypes: InternetServiceType[] = ['fiber', 'cable', 'dsl', 'wireless', 'satellite', 'other']
+  if (!input.service_type || !validTypes.includes(input.service_type as InternetServiceType)) {
+    errors.push({ field: 'service_type', message: 'El tipo de servicio es inválido', code: 'INVALID_VALUE' })
+  }
+
+  return { isValid: errors.length === 0, errors }
+}
+
+export function validateClassroomReservationInput(input: Record<string, unknown>): ValidationResult {
+  const errors: ValidationError[] = []
+
+  if (!input.title || typeof input.title !== 'string' || input.title.trim().length === 0) {
+    errors.push({ field: 'title', message: 'El título es requerido', code: 'REQUIRED_FIELD' })
+  } else if (input.title.length > 255) {
+    errors.push({ field: 'title', message: 'El título no puede exceder 255 caracteres', code: 'INVALID_LENGTH' })
+  }
+
+  if (!input.start_datetime || typeof input.start_datetime !== 'string') {
+    errors.push({ field: 'start_datetime', message: 'La fecha de inicio es requerida', code: 'REQUIRED_FIELD' })
+  }
+
+  if (!input.end_datetime || typeof input.end_datetime !== 'string') {
+    errors.push({ field: 'end_datetime', message: 'La fecha de fin es requerida', code: 'REQUIRED_FIELD' })
+  }
+
+  if (input.start_datetime && input.end_datetime) {
+    const start = new Date(input.start_datetime as string)
+    const end = new Date(input.end_datetime as string)
+    if (end <= start) {
+      errors.push({ field: 'end_datetime', message: 'La fecha de fin debe ser posterior a la de inicio', code: 'INVALID_DATE_RANGE' })
+    }
+    if (start < new Date()) {
+      errors.push({ field: 'start_datetime', message: 'La fecha de inicio no puede ser en el pasado', code: 'PAST_DATE' })
+    }
+  }
+
+  if (input.attendees_count !== undefined && input.attendees_count !== null) {
+    const count = Number(input.attendees_count)
+    if (isNaN(count) || count < 1) {
+      errors.push({ field: 'attendees_count', message: 'El número de asistentes debe ser al menos 1', code: 'INVALID_VALUE' })
+    }
+  }
+
+  return { isValid: errors.length === 0, errors }
+}
+

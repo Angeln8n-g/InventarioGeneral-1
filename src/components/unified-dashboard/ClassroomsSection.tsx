@@ -38,6 +38,24 @@ const AssignmentsIcon = () => (
   </svg>
 )
 
+const CalendarIcon = () => (
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+)
+
+const AvailableIcon = () => (
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
+
+const WifiIcon = () => (
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+  </svg>
+)
+
 export function ClassroomsSection({
   filters,
   summary,
@@ -60,16 +78,34 @@ export function ClassroomsSection({
         color: 'blue' as const,
       },
       {
-        title: 'Aulas con Dispositivos',
-        value: summary?.withDevices ?? 0,
-        icon: <DevicesIcon />,
+        title: 'Disponibles Ahora',
+        value: summary?.availableNow ?? 0,
+        icon: <AvailableIcon />,
         color: 'green' as const,
       },
       {
-        title: 'Total Asignaciones',
-        value: summary?.totalAssignments ?? 0,
-        icon: <AssignmentsIcon />,
+        title: 'Reservadas Ahora',
+        value: summary?.reservedNow ?? 0,
+        icon: <CalendarIcon />,
+        color: 'red' as const,
+      },
+      {
+        title: 'Reservas del Mes',
+        value: summary?.reservationsThisMonth ?? 0,
+        icon: <CalendarIcon />,
         color: 'purple' as const,
+      },
+      {
+        title: 'Servicios Internet',
+        value: summary?.internetServices ?? 0,
+        icon: <WifiIcon />,
+        color: 'orange' as const,
+      },
+      {
+        title: 'Total Dispositivos',
+        value: summary?.totalAssignments ?? 0,
+        icon: <DevicesIcon />,
+        color: 'yellow' as const,
       },
     ],
     [summary]
@@ -227,7 +263,7 @@ export function ClassroomsSection({
   return (
     <div className="space-y-6">
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {metrics.map((metric) => (
           <EnhancedMetricCard
             key={metric.title}

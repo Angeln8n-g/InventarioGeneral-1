@@ -186,7 +186,17 @@ export function UnifiedDashboardContainer({ initialSection = 'overview' }: Unifi
 
   // Transform classrooms data for summary
   const classroomsSummary = React.useMemo(() => {
-    if (!classroomsData?.data) return { total: 0, withDevices: 0, totalAssignments: 0 }
+    if (!classroomsData?.data) return { 
+      total: 0, 
+      withDevices: 0, 
+      totalAssignments: 0,
+      totalReservations: 0,
+      activeReservations: 0,
+      reservedNow: 0,
+      availableNow: 0,
+      reservationsThisMonth: 0,
+      internetServices: 0,
+    }
     
     const classrooms = classroomsData.data
     
@@ -201,10 +211,20 @@ export function UnifiedDashboardContainer({ initialSection = 'overview' }: Unifi
     const withDevices = classroomsWithDevicesSet.size
     const totalAssignments = assignmentsData?.count || electronicsData?.data?.filter(d => (d as any).current_assignment).length || 0
     
+    // Get reservation metrics from classrooms data (if available)
+    const reservedNow = classrooms.filter((c: any) => c.is_reserved).length
+    const availableNow = classrooms.length - reservedNow
+    
     return {
       total: classrooms.length,
       withDevices,
       totalAssignments,
+      totalReservations: (classroomsData as any).reservationStats?.total || 0,
+      activeReservations: (classroomsData as any).reservationStats?.active || 0,
+      reservedNow,
+      availableNow,
+      reservationsThisMonth: (classroomsData as any).reservationStats?.thisMonth || 0,
+      internetServices: (classroomsData as any).internetServicesCount || 0,
     }
   }, [classroomsData, assignmentsData, electronicsData])
 

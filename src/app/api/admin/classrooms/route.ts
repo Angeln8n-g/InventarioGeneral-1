@@ -9,7 +9,29 @@ export async function GET(request: NextRequest) {
   try {
     return await withPermission(request, PERMISSIONS.ADMIN_MANAGE_TOOLS, async () => {
       const classrooms = await classroomOperations.getAll()
-      return NextResponse.json({ data: classrooms, total: classrooms.length })
+      
+      // Get reservation and internet service stats
+      let reservationStats = { total: 0, active: 0, thisMonth: 0 }
+      let internetServicesCount = 0
+      
+      try {
+        const stats = await classroomOperations.getStats()
+        reservationStats = {
+          total: stats.totalReservations,
+          active: stats.activeReservations,
+          thisMonth: stats.reservationsThisMonth,
+        }
+        internetServicesCount = stats.internetServicesCount
+      } catch (statsError) {
+        console.error('[Classrooms API] Stats error (non-critical):', statsError)
+      }
+      
+      return NextResponse.json({ 
+        data: classrooms, 
+        total: classrooms.length,
+        reservationStats,
+        internetServicesCount,
+      })
     })
   } catch (error: any) {
     return NextResponse.json({ error: { code: ERROR_CODES.DATABASE_ERROR, message: ERROR_MESSAGES.GENERIC_ERROR, timestamp: new Date().toISOString() } }, { status: 500 })
