@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { scheduledEvaluationOperations, auditLogOperations } from '@/lib/supabase-client'
+import { scheduledEvaluationOperations, auditLogOperations, notificationOperations } from '@/lib/supabase-client'
 import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
@@ -44,6 +44,20 @@ function validateCreateScheduledEvaluationInput(body: unknown): {
     }
   }
 
+  // Validate optional assigned_to
+  if (input.assigned_to !== undefined && input.assigned_to !== null) {
+    if (typeof input.assigned_to !== 'number') {
+      errors.push('assigned_to must be a number')
+    }
+  }
+
+  // Validate optional approver_id
+  if (input.approver_id !== undefined && input.approver_id !== null) {
+    if (typeof input.approver_id !== 'number') {
+      errors.push('approver_id must be a number')
+    }
+  }
+
   if (errors.length > 0) {
     return { isValid: false, errors }
   }
@@ -55,6 +69,8 @@ function validateCreateScheduledEvaluationInput(body: unknown): {
       classroom_id: input.classroom_id as number,
       template_id: input.template_id as number,
       scheduled_date: input.scheduled_date as string,
+      assigned_to: input.assigned_to as number | undefined,
+      approver_id: input.approver_id as number | undefined,
     },
   }
 }
@@ -179,6 +195,8 @@ export async function GET(request: NextRequest) {
  *   - classroom_id: ID of the classroom to evaluate (required)
  *   - template_id: ID of the evaluation template to use (required)
  *   - scheduled_date: Date and time for the evaluation (required, ISO string)
+ *   - assigned_to: ID of the user assigned to perform the evaluation (optional)
+ *   - approver_id: ID of the user who will approve the evaluation (optional)
  *
  * @returns Created scheduled evaluation
  * Validates: Requirements 1.2, 1.3
@@ -216,6 +234,45 @@ export async function POST(request: NextRequest) {
         auth.user.id
       )
       console.log('[Scheduled Evaluations API] Scheduled evaluation created:', scheduledEvaluation)
+
+      // Get classroom details for notification
+      let classroomName = 'Espacio'
+      try {
+        const evaluationWithDetails = await scheduledEvaluationOperations.getById(scheduledEvaluation.id)
+        if (evaluationWithDetails && 'classroom' in evaluationWithDetails) {
+          classroomName = (evaluationWithDetails as { classroom: { name: string } }).classroom.name
+        }
+      } catch (detailsError) {
+        console.error('[Scheduled Evaluations API] Error getting classroom details:', detailsError)
+      }
+
+      // Send notification to assigned evaluator if specified
+      if (validation.data.assigned_to) {
+        try {
+          const scheduledDate = new Date(validation.data.scheduled_date)
+          const formattedDate = scheduledDate.toLocaleDateString('es-ES', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })
+          const formattedTime = scheduledDate.toLocaleTimeString('es-ES', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+
+          await notificationOperations.create({
+            user_id: validation.data.assigned_to,
+            type: 'evaluation_assigned',
+            title: 'Nueva Evaluación Asignada',
+            message: `Se te ha asignado una evaluación para "${classroomName}" programada para el ${formattedDate} a las ${formattedTime}.`,
+          })
+          console.log('[Scheduled Evaluations API] Notification sent to assigned user:', validation.data.assigned_to)
+        } catch (notificationError) {
+          console.error('[Scheduled Evaluations API] Error sending notification:', notificationError)
+          // Don't fail the request if notification fails
+        }
+      }
 
       // Create audit log
       try {

@@ -4,6 +4,7 @@ import {
   evaluationTemplateOperations,
   evaluationResultOperations,
   auditLogOperations,
+  notificationOperations,
 } from '@/lib/supabase-client'
 import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -315,6 +316,23 @@ export async function POST(
           responses_count: body.responses.length,
         },
       })
+
+      // Send notification to approver if evaluation is completed (not draft) and has an approver
+      if (!isDraft && evaluation.approver_id) {
+        try {
+          const classroomName = evaluation.classroom?.name || 'Espacio'
+          await notificationOperations.create({
+            user_id: evaluation.approver_id,
+            type: 'evaluation_pending_approval',
+            title: 'Evaluación Pendiente de Aprobación',
+            message: `La evaluación de "${classroomName}" ha sido completada y requiere tu aprobación. Puntuación: ${result.score_percentage.toFixed(1)}%`,
+          })
+          console.log('[Submit Evaluation API] Notification sent to approver:', evaluation.approver_id)
+        } catch (notificationError) {
+          console.error('[Submit Evaluation API] Error sending notification to approver:', notificationError)
+          // Don't fail the request if notification fails
+        }
+      }
 
       // Build response
       // Requirement 3.7: Update scheduled evaluation status to completed (handled in evaluationResultOperations)
