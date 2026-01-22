@@ -330,15 +330,123 @@ async function fetchGeneralReportData(startDate: string | null, endDate: string 
     if (evaluationsByStatus[status] !== undefined) evaluationsByStatus[status]++
   })
 
+  // Fetch evaluator performance data
+  let evaluatorQuery = supabase
+    .from('evaluation_results')
+    .select(`
+      id, evaluator_id, score_percentage, completed_at, approval_status,
+      evaluator:users!evaluation_results_evaluator_id_fkey(id, username, full_name)
+    `)
+    .eq('is_draft', false)
+  
+  if (startDate) evaluatorQuery = evaluatorQuery.gte('completed_at', startDate)
+  if (endDate) evaluatorQuery = evaluatorQuery.lte('completed_at', endDate)
+  
+  const { data: evaluatorResults, error: evaluatorError } = await evaluatorQuery
+  if (evaluatorError) throw evaluatorError
+
+  // Process evaluator data
+  const evaluatorMap = new Map<number, {
+    id: number
+    username: string
+    full_name: string | null
+    total_evaluations: number
+    average_score: number
+    scores: number[]
+    approved: number
+    rejected: number
+    pending: number
+  }>()
+
+  evaluatorResults?.forEach((result) => {
+    const evaluator = result.evaluator as unknown as { id: number; username: string; full_name: string | null }
+    if (!evaluator) return
+
+    if (!evaluatorMap.has(evaluator.id)) {
+      evaluatorMap.set(evaluator.id, {
+        id: evaluator.id,
+        username: evaluator.username,
+        full_name: evaluator.full_name,
+        total_evaluations: 0,
+        average_score: 0,
+        scores: [],
+        approved: 0,
+        rejected: 0,
+        pending: 0,
+      })
+    }
+
+    const data = evaluatorMap.get(evaluator.id)!
+    data.total_evaluations++
+    data.scores.push(result.score_percentage)
+    
+    if (result.approval_status === 'approved') data.approved++
+    else if (result.approval_status === 'rejected') data.rejected++
+    else data.pending++
+  })
+
+  // Calculate averages for evaluators
+  const evaluatorPerformance = Array.from(evaluatorMap.values()).map((e) => ({
+    ...e,
+    average_score: e.scores.length > 0 
+      ? Math.round((e.scores.reduce((a, b) => a + b, 0) / e.scores.length) * 100) / 100 
+      : 0,
+  })).sort((a, b) => b.total_evaluations - a.total_evaluations)
+
+  // Fetch approval metrics
+  let approvalQuery = supabase
+    .from('evaluation_results')
+    .select(`
+      id, approval_status, approved_at, approval_comments,
+      approver:users!evaluation_results_approved_by_fkey(id, username, full_name)
+    `)
+    .eq('is_draft', false)
+    .not('approval_status', 'eq', 'pending')
+  
+  if (startDate) approvalQuery = approvalQuery.gte('completed_at', startDate)
+  if (endDate) approvalQuery = approvalQuery.lte('completed_at', endDate)
+  
+  const { data: approvalResults, error: approvalError } = await approvalQuery
+  if (approvalError) throw approvalError
+
+  // Process approver data
+  const approverMap = new Map<number, {
+    id: number
+    username: string
+    full_name: string | null
+    total_reviewed: number
+    approved: number
+    rejected: number
+  }>()
+
+  approvalResults?.forEach((result) => {
+    const approver = result.approver as unknown as { id: number; username: string; full_name: string | null }
+    if (!approver) return
+
+    if (!approverMap.has(approver.id)) {
+      approverMap.set(approver.id, {
+        id: approver.id,
+        username: approver.username,
+        full_name: approver.full_name,
+        total_reviewed: 0,
+        approved: 0,
+        rejected: 0,
+      })
+    }
+
+    const data = approverMap.get(approver.id)!
+    data.total_reviewed++
+    if (result.approval_status === 'approved') data.approved++
+    else if (result.approval_status === 'rejected') data.rejected++
+  })
+
+  const approverPerformance = Array.from(approverMap.values())
+    .sort((a, b) => b.total_reviewed - a.total_reviewed)
+
   // Calculate global metrics from responsible data
   let totalEvaluations = 0
   let totalScoreSum = 0
   const spacesEvaluated = new Set<number>()
-  const categoryTotals = {
-    organization: { score: 0, max: 0 },
-    cleanliness: { score: 0, max: 0 },
-    maintenance: { score: 0, max: 0 },
-  }
   const scoreDistribution = { excellent: 0, acceptable: 0, requires_attention: 0 }
 
   responsibleData.data.forEach((responsible) => {
@@ -396,6 +504,9 @@ async function fetchGeneralReportData(startDate: string | null, endDate: string 
     bestPerformingSpaces: sortedSpaces.slice(0, 5),
     worstPerformingSpaces: sortedSpaces.slice(-5).reverse(),
     lowPerformers: responsibleData.lowPerformers,
+    evaluatorPerformance,
+    approverPerformance,
+    allSpaces: spaceData.data,
   }
 }
 
@@ -877,13 +988,36 @@ function generateSpaceReportExcel(
   return new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }
 
+interface EvaluatorPerformance {
+  id: number
+  username: string
+  full_name: string | null
+  total_evaluations: number
+  average_score: number
+  approved: number
+  rejected: number
+  pending: number
+}
+
+interface ApproverPerformance {
+  id: number
+  username: string
+  full_name: string | null
+  total_reviewed: number
+  approved: number
+  rejected: number
+}
+
 function generateGeneralReportExcel(
   globalMetrics: GlobalMetrics,
   responsibleRanking: ResponsiblePerformance[],
   bestPerformingSpaces: SpacePerformance[],
   worstPerformingSpaces: SpacePerformance[],
   lowPerformers: ResponsiblePerformance[],
-  filters: ReportFilters
+  filters: ReportFilters,
+  evaluatorPerformance?: EvaluatorPerformance[],
+  approverPerformance?: ApproverPerformance[],
+  allSpaces?: SpacePerformance[]
 ): Blob {
   const workbook = XLSX.utils.book_new()
   
@@ -981,6 +1115,66 @@ function generateGeneralReportExcel(
     
     const lowPerformersSheet = XLSX.utils.json_to_sheet(lowPerformersData)
     XLSX.utils.book_append_sheet(workbook, lowPerformersSheet, 'Bajo Desempeño')
+  }
+
+  // Evaluators Performance sheet
+  if (evaluatorPerformance && evaluatorPerformance.length > 0) {
+    const evaluatorData = evaluatorPerformance.map((item, index) => ({
+      'Ranking': index + 1,
+      'Evaluador': item.full_name || item.username,
+      'Usuario': item.username,
+      'Total Evaluaciones': item.total_evaluations,
+      'Promedio (%)': item.average_score,
+      'Clasificación': item.total_evaluations > 0 ? getScoreClassification(item.average_score) : 'Sin Evaluaciones',
+      'Aprobadas': item.approved,
+      'Rechazadas': item.rejected,
+      'Pendientes': item.pending,
+      'Tasa Aprobación (%)': item.total_evaluations > 0 
+        ? Math.round((item.approved / item.total_evaluations) * 100) 
+        : 0,
+    }))
+    
+    const evaluatorSheet = XLSX.utils.json_to_sheet(evaluatorData)
+    XLSX.utils.book_append_sheet(workbook, evaluatorSheet, 'Evaluadores')
+  }
+
+  // Approvers Performance sheet
+  if (approverPerformance && approverPerformance.length > 0) {
+    const approverData = approverPerformance.map((item, index) => ({
+      'Ranking': index + 1,
+      'Aprobador': item.full_name || item.username,
+      'Usuario': item.username,
+      'Total Revisadas': item.total_reviewed,
+      'Aprobadas': item.approved,
+      'Rechazadas': item.rejected,
+      'Tasa Aprobación (%)': item.total_reviewed > 0 
+        ? Math.round((item.approved / item.total_reviewed) * 100) 
+        : 0,
+      'Tasa Rechazo (%)': item.total_reviewed > 0 
+        ? Math.round((item.rejected / item.total_reviewed) * 100) 
+        : 0,
+    }))
+    
+    const approverSheet = XLSX.utils.json_to_sheet(approverData)
+    XLSX.utils.book_append_sheet(workbook, approverSheet, 'Aprobadores')
+  }
+
+  // All Spaces (Aulas Evaluadas) sheet
+  if (allSpaces && allSpaces.length > 0) {
+    const allSpacesData = allSpaces.map((space, index) => ({
+      'Ranking': index + 1,
+      'Espacio': space.classroom_name,
+      'Ubicación': space.location,
+      'Responsable': space.responsible_person || '-',
+      'Última Puntuación (%)': space.total_evaluations > 0 ? space.last_score : 'N/A',
+      'Promedio (%)': space.total_evaluations > 0 ? space.average_score : 'N/A',
+      'Clasificación': space.total_evaluations > 0 ? getScoreClassification(space.average_score) : 'Sin Evaluaciones',
+      'Tendencia': getTrendLabel(space.trend),
+      'Total Evaluaciones': space.total_evaluations,
+    }))
+    
+    const allSpacesSheet = XLSX.utils.json_to_sheet(allSpacesData)
+    XLSX.utils.book_append_sheet(workbook, allSpacesSheet, 'Aulas Evaluadas')
   }
   
   const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
@@ -1121,6 +1315,9 @@ export async function POST(request: NextRequest) {
             bestPerformingSpaces,
             worstPerformingSpaces,
             lowPerformers,
+            evaluatorPerformance,
+            approverPerformance,
+            allSpaces,
           } = await fetchGeneralReportData(startDate, endDate)
           
           if (format === 'pdf') {
@@ -1140,7 +1337,10 @@ export async function POST(request: NextRequest) {
               bestPerformingSpaces,
               worstPerformingSpaces,
               lowPerformers,
-              filters
+              filters,
+              evaluatorPerformance,
+              approverPerformance,
+              allSpaces
             )
             filename = `reporte-general-${timestamp}.xlsx`
           }

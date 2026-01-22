@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/app/store'
@@ -92,9 +93,18 @@ interface TemplateWithCount {
  */
 function EvaluationsPageContent() {
   const token = useSelector((state: RootState) => state.auth.token)
+  const searchParams = useSearchParams()
   
   // Active tab state
   const [activeTab, setActiveTab] = useState<TabType>('calendario')
+  
+  // Read tab from URL on mount
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && ['calendario', 'plantillas', 'historial', 'reportes', 'aprobaciones'].includes(tabParam)) {
+      setActiveTab(tabParam as TabType)
+    }
+  }, [searchParams])
   
   // Schedule modal state
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)

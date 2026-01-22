@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect, useRef, memo } from 'react'
+import React, { useEffect, useRef, memo, useCallback } from 'react'
 
 interface DialogProps {
   isOpen: boolean
@@ -20,26 +20,31 @@ const DialogComponent: React.FC<DialogProps> = ({
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose()
-      }
+  // Stable reference for escape handler
+  const handleEscape = useCallback((e: KeyboardEvent) => {
+    // Only close on Escape if the target is not an input/textarea
+    const target = e.target as HTMLElement
+    const isInputElement = target.tagName === 'INPUT' || 
+                          target.tagName === 'TEXTAREA' || 
+                          target.tagName === 'SELECT' ||
+                          target.isContentEditable
+    
+    if (e.key === 'Escape' && !isInputElement) {
+      onClose()
     }
+  }, [onClose])
 
+  useEffect(() => {
     if (isOpen) {
       document.addEventListener('keydown', handleEscape)
       document.body.style.overflow = 'hidden'
-      
-      // Focus trap
-      dialogRef.current?.focus()
     }
 
     return () => {
       document.removeEventListener('keydown', handleEscape)
       document.body.style.overflow = 'unset'
     }
-  }, [isOpen, onClose])
+  }, [isOpen, handleEscape])
 
   if (!isOpen) return null
 

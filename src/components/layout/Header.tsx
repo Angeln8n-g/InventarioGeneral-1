@@ -169,6 +169,7 @@ export const Header: React.FC<HeaderProps> = ({
                     message: n.message,
                     timestamp: n.created_at,
                     read: n.is_read,
+                    notificationType: n.type, // Pass original type for navigation
                   }))}
                   onMarkAsRead={handleMarkAsRead}
                   onMarkAllAsRead={handleMarkAllAsRead}

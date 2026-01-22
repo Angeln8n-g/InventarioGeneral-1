@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { Bell, CheckCircle, AlertCircle, Info, X, Settings, Trash2 } from 'lucide-react'
 
@@ -11,6 +12,7 @@ interface Notification {
   message: string
   timestamp: string
   read: boolean
+  notificationType?: string // Original notification type from DB
 }
 
 interface NotificationsDropdownProps {
@@ -33,6 +35,7 @@ export function NotificationsDropdown({
   onOpenPreferences,
 }: NotificationsDropdownProps) {
   const { t } = useLanguage()
+  const router = useRouter()
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
@@ -94,6 +97,31 @@ export function NotificationsDropdown({
     if (diffDays < 7) return `${diffDays}d`
     return date.toLocaleDateString()
   }, [t])
+
+  // Handle notification click with navigation
+  const handleNotificationClick = useCallback((notification: Notification) => {
+    onMarkAsRead(notification.id)
+    
+    // Navigate based on notification type
+    const notifType = notification.notificationType || notification.title.toLowerCase()
+    
+    // Evaluation-related notifications
+    if (notifType.includes('evaluation_assigned') || 
+        notifType.includes('evaluación asignada') ||
+        notifType.includes('asignada')) {
+      onClose()
+      router.push('/admin/classrooms/evaluations')
+    } else if (notifType.includes('evaluation_pending_approval') || 
+               notifType.includes('evaluation_approved') ||
+               notifType.includes('evaluation_rejected') ||
+               notifType.includes('aprobación') ||
+               notifType.includes('aprobada') ||
+               notifType.includes('rechazada')) {
+      onClose()
+      router.push('/admin/classrooms/evaluations?tab=aprobaciones')
+    }
+    // Add more navigation rules as needed
+  }, [onMarkAsRead, onClose, router])
 
   if (!isOpen) return null
 
@@ -194,7 +222,7 @@ export function NotificationsDropdown({
                   </div>
                   <div
                     className="flex-1 min-w-0 cursor-pointer"
-                    onClick={() => onMarkAsRead(notification.id)}
+                    onClick={() => handleNotificationClick(notification)}
                   >
                     <div className="flex items-start justify-between">
                       <p className={`text-sm font-medium ${!notification.read
