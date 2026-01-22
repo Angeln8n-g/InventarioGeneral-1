@@ -13,6 +13,10 @@ export type NotificationType =
   | 'system_announcement'
   | 'stock_alert'
   | 'system_maintenance'
+  | 'evaluation_assigned'
+  | 'evaluation_pending_approval'
+  | 'evaluation_approved'
+  | 'evaluation_rejected'
 
 export interface NotificationPreferences {
   id?: number

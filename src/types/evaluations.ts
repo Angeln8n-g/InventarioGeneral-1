@@ -49,6 +49,14 @@ export type ResponseType = 'yes' | 'no' | 'not_applicable'
 export type EvaluationStatus = 'pending' | 'completed' | 'overdue' | 'cancelled'
 
 /**
+ * Approval status for completed evaluations
+ * - pending: Awaiting approval
+ * - approved: Approved by designated approver
+ * - rejected: Rejected by designated approver
+ */
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+
+/**
  * Trend direction for performance reports
  */
 export type TrendDirection = 'up' | 'down' | 'stable'
@@ -133,6 +141,10 @@ export interface ScheduledEvaluation {
   status: EvaluationStatus
   /** User ID who created the schedule */
   created_by?: number
+  /** User ID of the assigned evaluator */
+  assigned_to?: number
+  /** User ID of the designated approver */
+  approver_id?: number
   /** Creation timestamp */
   created_at: string
   /** Last update timestamp */
@@ -156,6 +168,18 @@ export interface ScheduledEvaluationWithDetails extends ScheduledEvaluation {
     id: number
     name: string
     space_type: SpaceType
+  }
+  /** Assigned evaluator information */
+  assigned_user?: {
+    id: number
+    username: string
+    full_name?: string
+  }
+  /** Designated approver information */
+  approver?: {
+    id: number
+    username: string
+    full_name?: string
   }
   /** Evaluation result if completed */
   result?: EvaluationResult
@@ -198,6 +222,14 @@ export interface EvaluationResult {
   maintenance_max: number
   /** Whether this is a draft (incomplete) evaluation */
   is_draft: boolean
+  /** Approval status: pending, approved, or rejected */
+  approval_status: ApprovalStatus
+  /** User ID who approved/rejected the evaluation */
+  approved_by?: number
+  /** Timestamp when approved/rejected */
+  approved_at?: string
+  /** Comments from approver explaining the decision */
+  approval_comments?: string
   /** Creation timestamp */
   created_at: string
   /** Last update timestamp */
@@ -215,6 +247,13 @@ export interface EvaluationResultWithResponses extends EvaluationResult {
   evaluator: {
     id: number
     username: string
+    full_name?: string
+  }
+  /** Approver information (if approved/rejected) */
+  approver?: {
+    id: number
+    username: string
+    full_name?: string
   }
 }
 
@@ -313,6 +352,10 @@ export interface CreateScheduledEvaluationInput {
   template_id: number
   /** Date and time for the evaluation */
   scheduled_date: string
+  /** ID of the user assigned to perform the evaluation */
+  assigned_to?: number
+  /** ID of the user who will approve the evaluation */
+  approver_id?: number
 }
 
 /**
@@ -492,4 +535,64 @@ export const VALID_RESPONSE_TYPES: readonly ResponseType[] = ['yes', 'no', 'not_
  */
 export function isValidResponseType(response: string): response is ResponseType {
   return VALID_RESPONSE_TYPES.includes(response as ResponseType)
+}
+
+// ============================================================================
+// Approval Types
+// ============================================================================
+
+/**
+ * Input for approving or rejecting an evaluation
+ * Input para aprobar o rechazar una evaluación
+ */
+export interface ApproveEvaluationInput {
+  /** The approval decision */
+  decision: 'approved' | 'rejected'
+  /** Comments explaining the decision */
+  comments?: string
+}
+
+/**
+ * Evaluation pending approval with full details
+ * Evaluación pendiente de aprobación con detalles completos
+ */
+export interface EvaluationPendingApproval {
+  /** Evaluation result ID */
+  id: number
+  /** Scheduled evaluation ID */
+  scheduled_evaluation_id: number
+  /** Classroom information */
+  classroom: {
+    id: number
+    name: string
+    location: string
+    responsible_person?: string
+  }
+  /** Evaluator information */
+  evaluator: {
+    id: number
+    username: string
+    full_name?: string
+  }
+  /** Template used */
+  template: {
+    id: number
+    name: string
+    space_type: SpaceType
+  }
+  /** Evaluation scores */
+  total_score: number
+  max_possible_score: number
+  score_percentage: number
+  /** Category scores */
+  organization_score: number
+  organization_max: number
+  cleanliness_score: number
+  cleanliness_max: number
+  maintenance_score: number
+  maintenance_max: number
+  /** When the evaluation was completed */
+  completed_at: string
+  /** When the evaluation was scheduled */
+  scheduled_date: string
 }
