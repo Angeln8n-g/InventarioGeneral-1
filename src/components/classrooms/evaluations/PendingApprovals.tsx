@@ -540,6 +540,7 @@ export function PendingApprovals({
             <textarea
               value={approvalComments}
               onChange={(e) => setApprovalComments(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
               placeholder={approvalDecision === 'rejected' 
                 ? 'Explique el motivo del rechazo...'
                 : 'Agregue comentarios adicionales...'}
