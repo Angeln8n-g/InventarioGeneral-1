@@ -2375,13 +2375,16 @@ export const scheduledEvaluationOperations = {
     status?: EvaluationStatus
     classroom_id?: number
     template_id?: number
+    assigned_to?: number
   }): Promise<ScheduledEvaluationWithDetails[]> {
     let query = supabase
       .from('scheduled_evaluations')
       .select(`
         *,
         classroom:classrooms(id, name, location, responsible_person),
-        template:evaluation_templates(id, name, space_type)
+        template:evaluation_templates(id, name, space_type),
+        assigned_user:users!scheduled_evaluations_assigned_to_fkey(id, username, full_name),
+        approver:users!scheduled_evaluations_approver_id_fkey(id, username, full_name)
       `)
       .order('scheduled_date', { ascending: false })
 
@@ -2393,6 +2396,9 @@ export const scheduledEvaluationOperations = {
     }
     if (filters?.template_id) {
       query = query.eq('template_id', filters.template_id)
+    }
+    if (filters?.assigned_to) {
+      query = query.eq('assigned_to', filters.assigned_to)
     }
 
     const { data, error } = await query
@@ -2420,7 +2426,9 @@ export const scheduledEvaluationOperations = {
       .select(`
         *,
         classroom:classrooms(id, name, location, responsible_person),
-        template:evaluation_templates(id, name, space_type)
+        template:evaluation_templates(id, name, space_type),
+        assigned_user:users!scheduled_evaluations_assigned_to_fkey(id, username, full_name),
+        approver:users!scheduled_evaluations_approver_id_fkey(id, username, full_name)
       `)
       .eq('id', id)
       .single()
@@ -2462,6 +2470,8 @@ export const scheduledEvaluationOperations = {
         scheduled_date: input.scheduled_date,
         status: 'pending',
         created_by: userId || null,
+        assigned_to: input.assigned_to || null,
+        approver_id: input.approver_id || null,
       })
       .select()
       .single()
@@ -2890,6 +2900,102 @@ export const evaluationResultOperations = {
     }
     if (filters?.end_date) {
       query = query.lte('completed_at', filters.end_date)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data || []) as unknown as EvaluationResultWithResponses[]
+  },
+
+  /**
+   * Get result by ID
+   */
+  async getById(id: number): Promise<EvaluationResult | null> {
+    const { data, error } = await supabase
+      .from('evaluation_results')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    return data as EvaluationResult | null
+  },
+
+  /**
+   * Get result by ID with full details for approval review
+   */
+  async getByIdWithDetails(id: number): Promise<EvaluationResultWithResponses | null> {
+    const { data, error } = await supabase
+      .from('evaluation_results')
+      .select(`
+        *,
+        evaluator:users!evaluation_results_evaluator_id_fkey(id, username, full_name),
+        approver:users!evaluation_results_approved_by_fkey(id, username, full_name),
+        responses:evaluation_responses(
+          *,
+          question:template_questions(*)
+        ),
+        scheduled_evaluation:scheduled_evaluations(
+          *,
+          classroom:classrooms(id, name, location, responsible_person),
+          template:evaluation_templates(id, name, space_type)
+        )
+      `)
+      .eq('id', id)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    return data as unknown as EvaluationResultWithResponses | null
+  },
+
+  /**
+   * Update approval status of an evaluation result
+   */
+  async updateApproval(
+    id: number,
+    approvalStatus: 'approved' | 'rejected',
+    approvedBy: number,
+    comments?: string
+  ): Promise<EvaluationResult> {
+    const { data, error } = await supabase
+      .from('evaluation_results')
+      .update({
+        approval_status: approvalStatus,
+        approved_by: approvedBy,
+        approved_at: new Date().toISOString(),
+        approval_comments: comments || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data as EvaluationResult
+  },
+
+  /**
+   * Get evaluations pending approval for a specific approver
+   */
+  async getPendingApproval(approverId?: number): Promise<EvaluationResultWithResponses[]> {
+    let query = supabase
+      .from('evaluation_results')
+      .select(`
+        *,
+        evaluator:users!evaluation_results_evaluator_id_fkey(id, username, full_name),
+        scheduled_evaluation:scheduled_evaluations!inner(
+          *,
+          classroom:classrooms(id, name, location, responsible_person),
+          template:evaluation_templates(id, name, space_type)
+        )
+      `)
+      .eq('is_draft', false)
+      .eq('approval_status', 'pending')
+      .order('completed_at', { ascending: false })
+
+    // If approver ID is provided, filter by evaluations where this user is the designated approver
+    if (approverId) {
+      query = query.eq('scheduled_evaluation.approver_id', approverId)
     }
 
     const { data, error } = await query
