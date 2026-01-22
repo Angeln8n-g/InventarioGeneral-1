@@ -2813,7 +2813,7 @@ export const evaluationResultOperations = {
       .from('evaluation_results')
       .select(`
         *,
-        evaluator:users(id, username),
+        evaluator:users!evaluation_results_evaluator_id_fkey(id, username, full_name),
         responses:evaluation_responses(
           *,
           question:template_questions(*)
@@ -2837,7 +2837,7 @@ export const evaluationResultOperations = {
       .from('evaluation_results')
       .select(`
         *,
-        evaluator:users(id, username),
+        evaluator:users!evaluation_results_evaluator_id_fkey(id, username, full_name),
         scheduled_evaluation:scheduled_evaluations!inner(
           classroom_id,
           scheduled_date,
@@ -2883,7 +2883,7 @@ export const evaluationResultOperations = {
       .from('evaluation_results')
       .select(`
         *,
-        evaluator:users(id, username),
+        evaluator:users!evaluation_results_evaluator_id_fkey(id, username, full_name),
         scheduled_evaluation:scheduled_evaluations!inner(
           classroom_id,
           scheduled_date,
