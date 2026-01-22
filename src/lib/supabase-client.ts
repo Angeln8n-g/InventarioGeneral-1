@@ -2001,3 +2001,946 @@ export const internetServiceOperations = {
     if (error) throw error
   }
 }
+
+
+// ============================================================================
+// Evaluation System Operations
+// Sistema de Evaluación de Aulas
+// ============================================================================
+
+import type {
+  EvaluationTemplate,
+  EvaluationTemplateWithQuestions,
+  TemplateQuestion,
+  ScheduledEvaluation,
+  ScheduledEvaluationWithDetails,
+  EvaluationResult,
+  EvaluationResultWithResponses,
+  EvaluationResponse,
+  CreateTemplateInput,
+  UpdateTemplateInput,
+  CreateScheduledEvaluationInput,
+  CreateEvaluationResultInput,
+  SpaceType,
+  EvaluationStatus,
+} from '@/types/evaluations'
+
+// Evaluation Template Operations
+export const evaluationTemplateOperations = {
+  /**
+   * Get all active evaluation templates
+   */
+  async getAll(): Promise<EvaluationTemplate[]> {
+    const { data, error } = await supabase
+      .from('evaluation_templates')
+      .select('*')
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  },
+
+  /**
+   * Get a template by ID with all its questions
+   */
+  async getById(id: number): Promise<EvaluationTemplateWithQuestions | null> {
+    const { data, error } = await supabase
+      .from('evaluation_templates')
+      .select(`
+        *,
+        questions:template_questions(*)
+      `)
+      .eq('id', id)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    if (!data) return null
+
+    // Sort questions by display_order
+    const questions = (data.questions || []).sort(
+      (a: TemplateQuestion, b: TemplateQuestion) => a.display_order - b.display_order
+    )
+
+    return { ...data, questions }
+  },
+
+  /**
+   * Create a new evaluation template with questions
+   */
+  async create(input: CreateTemplateInput, userId?: number): Promise<EvaluationTemplateWithQuestions> {
+    // Validate at least one question
+    if (!input.questions || input.questions.length === 0) {
+      throw new Error('Template must have at least one question')
+    }
+
+    // Create template
+    const { data: template, error: templateError } = await supabase
+      .from('evaluation_templates')
+      .insert({
+        name: input.name,
+        space_type: input.space_type,
+        version: 1,
+        is_active: true,
+        created_by: userId || null,
+      })
+      .select()
+      .single()
+
+    if (templateError) throw templateError
+
+    // Create questions
+    const questionsToInsert = input.questions.map((q, index) => ({
+      template_id: template.id,
+      question_text: q.question_text,
+      category: q.category,
+      is_required: q.is_required,
+      display_order: q.display_order ?? index,
+    }))
+
+    const { data: questions, error: questionsError } = await supabase
+      .from('template_questions')
+      .insert(questionsToInsert)
+      .select()
+
+    if (questionsError) throw questionsError
+
+    return { ...template, questions: questions || [] }
+  },
+
+  /**
+   * Update an existing template
+   * If template has completed evaluations, creates a new version
+   */
+  async update(id: number, input: UpdateTemplateInput, userId?: number): Promise<EvaluationTemplateWithQuestions> {
+    // Check if template has completed evaluations
+    const { data: existingEvaluations } = await supabase
+      .from('scheduled_evaluations')
+      .select('id')
+      .eq('template_id', id)
+      .eq('status', 'completed')
+      .limit(1)
+
+    const hasCompletedEvaluations = existingEvaluations && existingEvaluations.length > 0
+
+    if (hasCompletedEvaluations && input.questions) {
+      // Create new version - deactivate old template
+      await supabase
+        .from('evaluation_templates')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', id)
+
+      // Get current template for version info
+      const { data: currentTemplate } = await supabase
+        .from('evaluation_templates')
+        .select('version, name, space_type')
+        .eq('id', id)
+        .single()
+
+      // Create new template with incremented version
+      const newTemplateInput: CreateTemplateInput = {
+        name: input.name || currentTemplate?.name || '',
+        space_type: input.space_type || currentTemplate?.space_type || 'training_room',
+        questions: input.questions.map((q, index) => ({
+          question_text: q.question_text,
+          category: q.category,
+          is_required: q.is_required,
+          display_order: q.display_order ?? index,
+        })),
+      }
+
+      const { data: newTemplate, error: newTemplateError } = await supabase
+        .from('evaluation_templates')
+        .insert({
+          name: newTemplateInput.name,
+          space_type: newTemplateInput.space_type,
+          version: (currentTemplate?.version || 1) + 1,
+          is_active: true,
+          created_by: userId || null,
+        })
+        .select()
+        .single()
+
+      if (newTemplateError) throw newTemplateError
+
+      // Create questions for new template
+      const questionsToInsert = newTemplateInput.questions.map((q, index) => ({
+        template_id: newTemplate.id,
+        question_text: q.question_text,
+        category: q.category,
+        is_required: q.is_required,
+        display_order: q.display_order ?? index,
+      }))
+
+      const { data: questions, error: questionsError } = await supabase
+        .from('template_questions')
+        .insert(questionsToInsert)
+        .select()
+
+      if (questionsError) throw questionsError
+
+      return { ...newTemplate, questions: questions || [] }
+    }
+
+    // No completed evaluations - update in place
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    }
+    if (input.name !== undefined) updateData.name = input.name
+    if (input.space_type !== undefined) updateData.space_type = input.space_type
+    if (input.is_active !== undefined) updateData.is_active = input.is_active
+
+    const { data: template, error: templateError } = await supabase
+      .from('evaluation_templates')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (templateError) throw templateError
+
+    // Update questions if provided
+    if (input.questions) {
+      // Delete existing questions
+      await supabase
+        .from('template_questions')
+        .delete()
+        .eq('template_id', id)
+
+      // Insert new questions
+      const questionsToInsert = input.questions.map((q, index) => ({
+        template_id: id,
+        question_text: q.question_text,
+        category: q.category,
+        is_required: q.is_required,
+        display_order: q.display_order ?? index,
+      }))
+
+      const { data: questions, error: questionsError } = await supabase
+        .from('template_questions')
+        .insert(questionsToInsert)
+        .select()
+
+      if (questionsError) throw questionsError
+
+      return { ...template, questions: questions || [] }
+    }
+
+    // Return template with existing questions
+    const { data: questions } = await supabase
+      .from('template_questions')
+      .select('*')
+      .eq('template_id', id)
+      .order('display_order', { ascending: true })
+
+    return { ...template, questions: questions || [] }
+  },
+
+  /**
+   * Delete a template (only if no pending evaluations)
+   */
+  async delete(id: number): Promise<void> {
+    // Check for pending evaluations
+    const { data: pendingEvaluations } = await supabase
+      .from('scheduled_evaluations')
+      .select('id')
+      .eq('template_id', id)
+      .eq('status', 'pending')
+      .limit(1)
+
+    if (pendingEvaluations && pendingEvaluations.length > 0) {
+      throw new Error('Cannot delete template with pending evaluations')
+    }
+
+    // Delete template (cascade will delete questions)
+    const { error } = await supabase
+      .from('evaluation_templates')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+  },
+
+  /**
+   * Get templates by space type
+   */
+  async getBySpaceType(spaceType: SpaceType): Promise<EvaluationTemplate[]> {
+    const { data, error } = await supabase
+      .from('evaluation_templates')
+      .select('*')
+      .eq('space_type', spaceType)
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  },
+}
+
+// Template Question Operations
+export const templateQuestionOperations = {
+  /**
+   * Get all questions for a template
+   */
+  async getByTemplateId(templateId: number): Promise<TemplateQuestion[]> {
+    const { data, error } = await supabase
+      .from('template_questions')
+      .select('*')
+      .eq('template_id', templateId)
+      .order('display_order', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  },
+
+  /**
+   * Create a new question for a template
+   */
+  async create(
+    templateId: number,
+    input: Omit<TemplateQuestion, 'id' | 'template_id' | 'created_at' | 'updated_at'>
+  ): Promise<TemplateQuestion> {
+    const { data, error } = await supabase
+      .from('template_questions')
+      .insert({
+        template_id: templateId,
+        question_text: input.question_text,
+        category: input.category,
+        is_required: input.is_required,
+        display_order: input.display_order,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  /**
+   * Update a question
+   */
+  async update(
+    id: number,
+    input: Partial<Omit<TemplateQuestion, 'id' | 'template_id' | 'created_at' | 'updated_at'>>
+  ): Promise<TemplateQuestion> {
+    const { data, error } = await supabase
+      .from('template_questions')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  /**
+   * Delete a question
+   */
+  async delete(id: number): Promise<void> {
+    const { error } = await supabase
+      .from('template_questions')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+  },
+
+  /**
+   * Reorder questions within a template
+   */
+  async reorder(templateId: number, questionIds: number[]): Promise<void> {
+    // Update each question's display_order
+    const updates = questionIds.map((questionId, index) =>
+      supabase
+        .from('template_questions')
+        .update({ display_order: index, updated_at: new Date().toISOString() })
+        .eq('id', questionId)
+        .eq('template_id', templateId)
+    )
+
+    await Promise.all(updates)
+  },
+}
+
+// Scheduled Evaluation Operations
+export const scheduledEvaluationOperations = {
+  /**
+   * Get all scheduled evaluations with optional filters
+   */
+  async getAll(filters?: {
+    status?: EvaluationStatus
+    classroom_id?: number
+    template_id?: number
+  }): Promise<ScheduledEvaluationWithDetails[]> {
+    let query = supabase
+      .from('scheduled_evaluations')
+      .select(`
+        *,
+        classroom:classrooms(id, name, location, responsible_person),
+        template:evaluation_templates(id, name, space_type)
+      `)
+      .order('scheduled_date', { ascending: false })
+
+    if (filters?.status) {
+      query = query.eq('status', filters.status)
+    }
+    if (filters?.classroom_id) {
+      query = query.eq('classroom_id', filters.classroom_id)
+    }
+    if (filters?.template_id) {
+      query = query.eq('template_id', filters.template_id)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+
+    // Mark overdue evaluations
+    const now = new Date()
+    const results = (data || []).map((evaluation) => {
+      const scheduledDate = new Date(evaluation.scheduled_date)
+      if (evaluation.status === 'pending' && scheduledDate < now) {
+        return { ...evaluation, status: 'overdue' as EvaluationStatus }
+      }
+      return evaluation
+    })
+
+    return results as unknown as ScheduledEvaluationWithDetails[]
+  },
+
+  /**
+   * Get a scheduled evaluation by ID
+   */
+  async getById(id: number): Promise<ScheduledEvaluationWithDetails | null> {
+    const { data, error } = await supabase
+      .from('scheduled_evaluations')
+      .select(`
+        *,
+        classroom:classrooms(id, name, location, responsible_person),
+        template:evaluation_templates(id, name, space_type)
+      `)
+      .eq('id', id)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    if (!data) return null
+
+    // Check if overdue
+    const now = new Date()
+    const scheduledDate = new Date(data.scheduled_date)
+    if (data.status === 'pending' && scheduledDate < now) {
+      data.status = 'overdue'
+    }
+
+    // Get result if exists
+    const { data: result } = await supabase
+      .from('evaluation_results')
+      .select('*')
+      .eq('scheduled_evaluation_id', id)
+      .single()
+
+    return { ...data, result: result || undefined } as unknown as ScheduledEvaluationWithDetails
+  },
+
+  /**
+   * Create a new scheduled evaluation
+   */
+  async create(input: CreateScheduledEvaluationInput, userId?: number): Promise<ScheduledEvaluation> {
+    // Validate required fields
+    if (!input.classroom_id || !input.template_id || !input.scheduled_date) {
+      throw new Error('Missing required fields: classroom_id, template_id, and scheduled_date are required')
+    }
+
+    const { data, error } = await supabase
+      .from('scheduled_evaluations')
+      .insert({
+        classroom_id: input.classroom_id,
+        template_id: input.template_id,
+        scheduled_date: input.scheduled_date,
+        status: 'pending',
+        created_by: userId || null,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  /**
+   * Update a scheduled evaluation (only if pending)
+   */
+  async update(
+    id: number,
+    input: Partial<Pick<ScheduledEvaluation, 'scheduled_date' | 'template_id'>>
+  ): Promise<ScheduledEvaluation> {
+    // Check current status
+    const { data: current } = await supabase
+      .from('scheduled_evaluations')
+      .select('status')
+      .eq('id', id)
+      .single()
+
+    if (current?.status !== 'pending') {
+      throw new Error('Only pending evaluations can be edited')
+    }
+
+    const { data, error } = await supabase
+      .from('scheduled_evaluations')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  /**
+   * Delete (cancel) a scheduled evaluation
+   */
+  async delete(id: number): Promise<void> {
+    // Soft delete by changing status to cancelled
+    const { error } = await supabase
+      .from('scheduled_evaluations')
+      .update({
+        status: 'cancelled',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+
+    if (error) throw error
+  },
+
+  /**
+   * Get evaluations by date range (for calendar view)
+   */
+  async getByDateRange(startDate: string, endDate: string): Promise<ScheduledEvaluationWithDetails[]> {
+    const { data, error } = await supabase
+      .from('scheduled_evaluations')
+      .select(`
+        *,
+        classroom:classrooms(id, name, location, responsible_person),
+        template:evaluation_templates(id, name, space_type)
+      `)
+      .gte('scheduled_date', startDate)
+      .lte('scheduled_date', endDate)
+      .order('scheduled_date', { ascending: true })
+
+    if (error) throw error
+
+    // Mark overdue evaluations
+    const now = new Date()
+    const results = (data || []).map((evaluation) => {
+      const scheduledDate = new Date(evaluation.scheduled_date)
+      if (evaluation.status === 'pending' && scheduledDate < now) {
+        return { ...evaluation, status: 'overdue' as EvaluationStatus }
+      }
+      return evaluation
+    })
+
+    return results as unknown as ScheduledEvaluationWithDetails[]
+  },
+
+  /**
+   * Get evaluations by classroom
+   */
+  async getByClassroom(classroomId: number): Promise<ScheduledEvaluationWithDetails[]> {
+    return this.getAll({ classroom_id: classroomId })
+  },
+}
+
+// Evaluation Result Operations
+export const evaluationResultOperations = {
+  /**
+   * Create a new evaluation result with responses
+   */
+  async create(input: CreateEvaluationResultInput, evaluatorId: number): Promise<EvaluationResult> {
+    // Get the scheduled evaluation and template questions
+    const { data: scheduledEval } = await supabase
+      .from('scheduled_evaluations')
+      .select(`
+        *,
+        template:evaluation_templates(
+          *,
+          questions:template_questions(*)
+        )
+      `)
+      .eq('id', input.scheduled_evaluation_id)
+      .single()
+
+    if (!scheduledEval) {
+      throw new Error('Scheduled evaluation not found')
+    }
+
+    const template = scheduledEval.template as unknown as EvaluationTemplateWithQuestions
+    const questions = template.questions || []
+
+    // Validate required questions if not a draft
+    if (!input.is_draft) {
+      const requiredQuestionIds = questions
+        .filter((q: TemplateQuestion) => q.is_required)
+        .map((q: TemplateQuestion) => q.id)
+
+      const answeredQuestionIds = input.responses.map((r) => r.question_id)
+      const missingRequired = requiredQuestionIds.filter(
+        (id: number) => !answeredQuestionIds.includes(id)
+      )
+
+      if (missingRequired.length > 0) {
+        throw new Error('Missing required responses')
+      }
+    }
+
+    // Calculate scores
+    let totalScore = 0
+    let maxPossibleScore = 0
+    const categoryScores = {
+      organization: { score: 0, max: 0 },
+      cleanliness: { score: 0, max: 0 },
+      maintenance: { score: 0, max: 0 },
+    }
+
+    input.responses.forEach((response) => {
+      const question = questions.find((q: TemplateQuestion) => q.id === response.question_id)
+      if (!question) return
+
+      if (response.response !== 'not_applicable') {
+        maxPossibleScore++
+        categoryScores[question.category].max++
+
+        if (response.response === 'yes') {
+          totalScore++
+          categoryScores[question.category].score++
+        }
+      }
+    })
+
+    const scorePercentage = maxPossibleScore > 0
+      ? Math.round((totalScore / maxPossibleScore) * 10000) / 100
+      : 0
+
+    // Create result
+    const { data: result, error: resultError } = await supabase
+      .from('evaluation_results')
+      .insert({
+        scheduled_evaluation_id: input.scheduled_evaluation_id,
+        evaluator_id: evaluatorId,
+        completed_at: new Date().toISOString(),
+        total_score: totalScore,
+        max_possible_score: maxPossibleScore,
+        score_percentage: scorePercentage,
+        organization_score: categoryScores.organization.score,
+        organization_max: categoryScores.organization.max,
+        cleanliness_score: categoryScores.cleanliness.score,
+        cleanliness_max: categoryScores.cleanliness.max,
+        maintenance_score: categoryScores.maintenance.score,
+        maintenance_max: categoryScores.maintenance.max,
+        is_draft: input.is_draft || false,
+      })
+      .select()
+      .single()
+
+    if (resultError) throw resultError
+
+    // Create responses
+    const responsesToInsert = input.responses.map((r) => ({
+      result_id: result.id,
+      question_id: r.question_id,
+      response: r.response,
+      observation: r.observation || null,
+    }))
+
+    const { error: responsesError } = await supabase
+      .from('evaluation_responses')
+      .insert(responsesToInsert)
+
+    if (responsesError) throw responsesError
+
+    // Update scheduled evaluation status if not a draft
+    if (!input.is_draft) {
+      await supabase
+        .from('scheduled_evaluations')
+        .update({
+          status: 'completed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', input.scheduled_evaluation_id)
+    }
+
+    return result
+  },
+
+  /**
+   * Update an existing evaluation result (for drafts)
+   */
+  async update(id: number, input: CreateEvaluationResultInput): Promise<EvaluationResult> {
+    // Get current result
+    const { data: currentResult } = await supabase
+      .from('evaluation_results')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (!currentResult) {
+      throw new Error('Evaluation result not found')
+    }
+
+    if (!currentResult.is_draft) {
+      throw new Error('Cannot update a completed evaluation')
+    }
+
+    // Delete existing responses
+    await supabase
+      .from('evaluation_responses')
+      .delete()
+      .eq('result_id', id)
+
+    // Get template questions for score calculation
+    const { data: scheduledEval } = await supabase
+      .from('scheduled_evaluations')
+      .select(`
+        template:evaluation_templates(
+          questions:template_questions(*)
+        )
+      `)
+      .eq('id', currentResult.scheduled_evaluation_id)
+      .single()
+
+    const template = scheduledEval?.template as unknown as { questions: TemplateQuestion[] }
+    const questions = template?.questions || []
+
+    // Calculate scores
+    let totalScore = 0
+    let maxPossibleScore = 0
+    const categoryScores = {
+      organization: { score: 0, max: 0 },
+      cleanliness: { score: 0, max: 0 },
+      maintenance: { score: 0, max: 0 },
+    }
+
+    input.responses.forEach((response) => {
+      const question = questions.find((q) => q.id === response.question_id)
+      if (!question) return
+
+      if (response.response !== 'not_applicable') {
+        maxPossibleScore++
+        categoryScores[question.category].max++
+
+        if (response.response === 'yes') {
+          totalScore++
+          categoryScores[question.category].score++
+        }
+      }
+    })
+
+    const scorePercentage = maxPossibleScore > 0
+      ? Math.round((totalScore / maxPossibleScore) * 10000) / 100
+      : 0
+
+    // Update result
+    const { data: result, error: resultError } = await supabase
+      .from('evaluation_results')
+      .update({
+        completed_at: new Date().toISOString(),
+        total_score: totalScore,
+        max_possible_score: maxPossibleScore,
+        score_percentage: scorePercentage,
+        organization_score: categoryScores.organization.score,
+        organization_max: categoryScores.organization.max,
+        cleanliness_score: categoryScores.cleanliness.score,
+        cleanliness_max: categoryScores.cleanliness.max,
+        maintenance_score: categoryScores.maintenance.score,
+        maintenance_max: categoryScores.maintenance.max,
+        is_draft: input.is_draft || false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (resultError) throw resultError
+
+    // Create new responses
+    const responsesToInsert = input.responses.map((r) => ({
+      result_id: id,
+      question_id: r.question_id,
+      response: r.response,
+      observation: r.observation || null,
+    }))
+
+    const { error: responsesError } = await supabase
+      .from('evaluation_responses')
+      .insert(responsesToInsert)
+
+    if (responsesError) throw responsesError
+
+    // Update scheduled evaluation status if not a draft
+    if (!input.is_draft) {
+      await supabase
+        .from('scheduled_evaluations')
+        .update({
+          status: 'completed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', currentResult.scheduled_evaluation_id)
+    }
+
+    return result
+  },
+
+  /**
+   * Get result by scheduled evaluation ID
+   */
+  async getByScheduledId(scheduledEvaluationId: number): Promise<EvaluationResultWithResponses | null> {
+    const { data, error } = await supabase
+      .from('evaluation_results')
+      .select(`
+        *,
+        evaluator:users(id, username),
+        responses:evaluation_responses(
+          *,
+          question:template_questions(*)
+        )
+      `)
+      .eq('scheduled_evaluation_id', scheduledEvaluationId)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    return data as unknown as EvaluationResultWithResponses | null
+  },
+
+  /**
+   * Get results by classroom (for history)
+   */
+  async getByClassroom(
+    classroomId: number,
+    filters?: { start_date?: string; end_date?: string }
+  ): Promise<EvaluationResultWithResponses[]> {
+    let query = supabase
+      .from('evaluation_results')
+      .select(`
+        *,
+        evaluator:users(id, username),
+        scheduled_evaluation:scheduled_evaluations!inner(
+          classroom_id,
+          scheduled_date,
+          template:evaluation_templates(id, name, space_type)
+        )
+      `)
+      .eq('scheduled_evaluation.classroom_id', classroomId)
+      .eq('is_draft', false)
+      .order('completed_at', { ascending: false })
+
+    if (filters?.start_date) {
+      query = query.gte('completed_at', filters.start_date)
+    }
+    if (filters?.end_date) {
+      query = query.lte('completed_at', filters.end_date)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data || []) as unknown as EvaluationResultWithResponses[]
+  },
+
+  /**
+   * Get results by responsible person
+   */
+  async getByResponsible(
+    responsiblePerson: string,
+    filters?: { start_date?: string; end_date?: string }
+  ): Promise<EvaluationResultWithResponses[]> {
+    // First get classrooms for this responsible person
+    const { data: classrooms } = await supabase
+      .from('classrooms')
+      .select('id')
+      .eq('responsible_person', responsiblePerson)
+
+    if (!classrooms || classrooms.length === 0) {
+      return []
+    }
+
+    const classroomIds = classrooms.map((c) => c.id)
+
+    let query = supabase
+      .from('evaluation_results')
+      .select(`
+        *,
+        evaluator:users(id, username),
+        scheduled_evaluation:scheduled_evaluations!inner(
+          classroom_id,
+          scheduled_date,
+          classroom:classrooms(id, name, location, responsible_person),
+          template:evaluation_templates(id, name, space_type)
+        )
+      `)
+      .in('scheduled_evaluation.classroom_id', classroomIds)
+      .eq('is_draft', false)
+      .order('completed_at', { ascending: false })
+
+    if (filters?.start_date) {
+      query = query.gte('completed_at', filters.start_date)
+    }
+    if (filters?.end_date) {
+      query = query.lte('completed_at', filters.end_date)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data || []) as unknown as EvaluationResultWithResponses[]
+  },
+}
+
+// Evaluation Response Operations
+export const evaluationResponseOperations = {
+  /**
+   * Create multiple responses in batch
+   */
+  async createBatch(
+    resultId: number,
+    responses: Array<{
+      question_id: number
+      response: 'yes' | 'no' | 'not_applicable'
+      observation?: string
+    }>
+  ): Promise<EvaluationResponse[]> {
+    const responsesToInsert = responses.map((r) => ({
+      result_id: resultId,
+      question_id: r.question_id,
+      response: r.response,
+      observation: r.observation || null,
+    }))
+
+    const { data, error } = await supabase
+      .from('evaluation_responses')
+      .insert(responsesToInsert)
+      .select()
+
+    if (error) throw error
+    return data || []
+  },
+
+  /**
+   * Get all responses for a result
+   */
+  async getByResultId(resultId: number): Promise<EvaluationResponse[]> {
+    const { data, error } = await supabase
+      .from('evaluation_responses')
+      .select(`
+        *,
+        question:template_questions(*)
+      `)
+      .eq('result_id', resultId)
+      .order('question_id', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  },
+}

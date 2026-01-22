@@ -7,7 +7,7 @@ import { useSelector } from 'react-redux'
 import { RootState } from '@/app/store'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { ErrorBoundary, ErrorMessage } from '@/components/ui/ErrorBoundary'
-import { Calendar } from 'lucide-react'
+import { Calendar, ClipboardCheck } from 'lucide-react'
 
 interface ClassroomItem {
   id: number
@@ -99,6 +99,13 @@ function ClassroomsPageContent() {
             </div>
           </div>
           <div className="flex gap-2">
+            <Link 
+              href="/admin/classrooms/evaluations" 
+              className="flex items-center gap-2 claro-button-secondary px-4 py-2 rounded-lg text-sm font-medium"
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              Evaluaciones
+            </Link>
             <Link 
               href="/admin/classrooms/calendar" 
               className="flex items-center gap-2 claro-button-secondary px-4 py-2 rounded-lg text-sm font-medium"
