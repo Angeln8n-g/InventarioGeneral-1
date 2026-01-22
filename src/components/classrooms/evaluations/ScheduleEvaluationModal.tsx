@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Dialog } from '@/components/ui/Dialog'
-import { Calendar, Building2, FileText, Clock, AlertCircle, CheckCircle } from 'lucide-react'
+import { Calendar, Building2, FileText, Clock, AlertCircle, CheckCircle, User, UserCheck } from 'lucide-react'
 import type { SpaceType } from '@/types/evaluations'
 
 /**
@@ -28,6 +28,16 @@ interface TemplateWithCount {
   created_at: string
   updated_at: string
   question_count: number
+}
+
+/**
+ * Admin user for assignment
+ */
+interface AdminUser {
+  id: number
+  username: string
+  full_name?: string
+  role: string
 }
 
 /**
@@ -94,14 +104,18 @@ export function ScheduleEvaluationModal({
   const [selectedClassroomId, setSelectedClassroomId] = useState<number | null>(null)
   const [scheduledDate, setScheduledDate] = useState<string>('')
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
+  const [assignedTo, setAssignedTo] = useState<number | null>(null)
+  const [approverId, setApproverId] = useState<number | null>(null)
   
   // Data state
   const [classrooms, setClassrooms] = useState<Classroom[]>([])
   const [templates, setTemplates] = useState<TemplateWithCount[]>([])
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
   
   // UI state
   const [isLoadingClassrooms, setIsLoadingClassrooms] = useState(false)
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false)
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -168,14 +182,45 @@ export function ScheduleEvaluationModal({
     }
   }, [token])
 
+  /**
+   * Fetches admin users for assignment
+   */
+  const fetchAdminUsers = useCallback(async () => {
+    if (!token) return
+    setIsLoadingUsers(true)
+    try {
+      const res = await fetch('/api/admin/users?role=admin', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        // Filter to only admin users
+        const admins = (data.data || []).filter((u: AdminUser) => 
+          u.role === 'admin' || u.role === 'superadmin'
+        )
+        setAdminUsers(admins)
+      } else {
+        console.error('Error fetching admin users:', res.status)
+        // Don't show error for this, it's optional
+      }
+    } catch (err) {
+      console.error('Error fetching admin users:', err)
+    } finally {
+      setIsLoadingUsers(false)
+    }
+  }, [token])
+
   // Fetch data when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchClassrooms()
       fetchTemplates()
+      fetchAdminUsers()
       // Reset form state
       setSelectedClassroomId(null)
       setSelectedTemplateId(null)
+      setAssignedTo(null)
+      setApproverId(null)
       setError(null)
       setSuccess(false)
       setTouched({ classroom: false, date: false, template: false })
@@ -190,7 +235,7 @@ export function ScheduleEvaluationModal({
         setScheduledDate('')
       }
     }
-  }, [isOpen, initialDate, fetchClassrooms, fetchTemplates])
+  }, [isOpen, initialDate, fetchClassrooms, fetchTemplates, fetchAdminUsers])
 
   /**
    * Validates the form fields
@@ -248,17 +293,27 @@ export function ScheduleEvaluationModal({
     setError(null)
     
     try {
+      const requestBody: Record<string, unknown> = {
+        classroom_id: selectedClassroomId,
+        template_id: selectedTemplateId,
+        scheduled_date: new Date(scheduledDate).toISOString()
+      }
+      
+      // Add optional fields if selected
+      if (assignedTo) {
+        requestBody.assigned_to = assignedTo
+      }
+      if (approverId) {
+        requestBody.approver_id = approverId
+      }
+      
       const res = await fetch('/api/admin/evaluations/schedule', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          classroom_id: selectedClassroomId,
-          template_id: selectedTemplateId,
-          scheduled_date: new Date(scheduledDate).toISOString()
-        })
+        body: JSON.stringify(requestBody)
       })
       
       if (res.ok) {
@@ -445,6 +500,68 @@ export function ScheduleEvaluationModal({
                 No hay plantillas disponibles. Cree una plantilla primero.
               </p>
             )}
+          </div>
+
+          {/* Assigned evaluator selector (optional) */}
+          <div>
+            <label 
+              htmlFor="assignedTo" 
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              <User className="w-4 h-4 inline-block mr-1" />
+              Evaluador asignado
+              <span className="text-gray-400 dark:text-gray-500 font-normal ml-1">(opcional)</span>
+            </label>
+            <select
+              id="assignedTo"
+              value={assignedTo ?? ''}
+              onChange={(e) => setAssignedTo(e.target.value ? Number(e.target.value) : null)}
+              disabled={isLoadingUsers || isSubmitting}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-claro-red focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">
+                {isLoadingUsers ? 'Cargando usuarios...' : 'Sin asignar (cualquier admin puede evaluar)'}
+              </option>
+              {adminUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.full_name || user.username}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              El evaluador asignado recibirá una notificación con los detalles de la evaluación.
+            </p>
+          </div>
+
+          {/* Approver selector (optional) */}
+          <div>
+            <label 
+              htmlFor="approverId" 
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              <UserCheck className="w-4 h-4 inline-block mr-1" />
+              Aprobador designado
+              <span className="text-gray-400 dark:text-gray-500 font-normal ml-1">(opcional)</span>
+            </label>
+            <select
+              id="approverId"
+              value={approverId ?? ''}
+              onChange={(e) => setApproverId(e.target.value ? Number(e.target.value) : null)}
+              disabled={isLoadingUsers || isSubmitting}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-claro-red focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">
+                {isLoadingUsers ? 'Cargando usuarios...' : 'Sin aprobador (no requiere aprobación)'}
+              </option>
+              {adminUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.full_name || user.username}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              El aprobador recibirá una notificación cuando la evaluación sea completada para revisarla y aprobarla.
+            </p>
           </div>
 
           {/* Action buttons */}
