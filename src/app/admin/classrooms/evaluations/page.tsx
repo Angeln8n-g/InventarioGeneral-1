@@ -11,7 +11,8 @@ import {
   FileText, 
   History, 
   BarChart3,
-  ClipboardCheck
+  ClipboardCheck,
+  CheckSquare
 } from 'lucide-react'
 
 // Import evaluation components
@@ -22,7 +23,9 @@ import {
   TemplateEditorModal,
   EvaluationHistory,
   EvaluationDetailModal,
-  EvaluationReports
+  EvaluationReports,
+  ExecuteEvaluationModal,
+  PendingApprovals
 } from '@/components/classrooms/evaluations'
 import type { TemplateWithQuestions } from '@/components/classrooms/evaluations'
 import type { SpaceType } from '@/types/evaluations'
@@ -31,7 +34,7 @@ import type { SpaceType } from '@/types/evaluations'
  * Tab type for the evaluations page
  * Validates: Requirements 7.2 (tabs for Calendario, Plantillas, Historial, Reportes)
  */
-type TabType = 'calendario' | 'plantillas' | 'historial' | 'reportes'
+type TabType = 'calendario' | 'plantillas' | 'historial' | 'reportes' | 'aprobaciones'
 
 /**
  * Tab configuration with icons and labels
@@ -40,7 +43,8 @@ const TABS: Array<{ id: TabType; label: string; icon: React.ElementType }> = [
   { id: 'calendario', label: 'Calendario', icon: Calendar },
   { id: 'plantillas', label: 'Plantillas', icon: FileText },
   { id: 'historial', label: 'Historial', icon: History },
-  { id: 'reportes', label: 'Reportes', icon: BarChart3 }
+  { id: 'reportes', label: 'Reportes', icon: BarChart3 },
+  { id: 'aprobaciones', label: 'Aprobaciones', icon: CheckSquare }
 ]
 
 /**
@@ -104,6 +108,10 @@ function EvaluationsPageContent() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [selectedEvaluationId, setSelectedEvaluationId] = useState<number | null>(null)
   
+  // Execute evaluation modal state
+  const [isExecuteModalOpen, setIsExecuteModalOpen] = useState(false)
+  const [executeEvaluationId, setExecuteEvaluationId] = useState<number | null>(null)
+  
   // Selected classroom for history tab
   const [selectedClassroomId, setSelectedClassroomId] = useState<number | null>(null)
   
@@ -122,18 +130,21 @@ function EvaluationsPageContent() {
 
   /**
    * Handles clicking on an evaluation in the calendar
+   * - For completed evaluations: switch to history tab
+   * - For pending/overdue evaluations: open execute modal
+   * Validates: Requirements 3.1 (initiate evaluation)
    */
   const handleEvaluationClick = useCallback((evaluation: CalendarEvent) => {
     if (evaluation.status === 'completed') {
-      // For completed evaluations, we need to get the result ID
-      // For now, we'll switch to history tab and select the classroom
+      // For completed evaluations, switch to history tab and select the classroom
       setSelectedClassroomId(evaluation.classroom_id)
       setActiveTab('historial')
-    } else {
-      // For pending/overdue evaluations, could open execution modal
-      // For now, just show info
-      console.log('Evaluation clicked:', evaluation)
+    } else if (evaluation.status === 'pending' || evaluation.status === 'overdue') {
+      // For pending/overdue evaluations, open the execute modal
+      setExecuteEvaluationId(evaluation.id)
+      setIsExecuteModalOpen(true)
     }
+    // Cancelled evaluations are not clickable for execution
   }, [])
 
   /**
@@ -143,6 +154,17 @@ function EvaluationsPageContent() {
     setIsScheduleModalOpen(false)
     setScheduleInitialDate(undefined)
     // Trigger calendar refresh
+    setCalendarRefreshKey(prev => prev + 1)
+  }, [])
+
+  /**
+   * Handles successful execution of an evaluation
+   * Validates: Requirements 3.7 (update status to completed)
+   */
+  const handleExecuteSuccess = useCallback(() => {
+    setIsExecuteModalOpen(false)
+    setExecuteEvaluationId(null)
+    // Trigger calendar refresh to show updated status
     setCalendarRefreshKey(prev => prev + 1)
   }, [])
 
@@ -284,6 +306,15 @@ function EvaluationsPageContent() {
           <EvaluationReports token={token} />
         )
       
+      case 'aprobaciones':
+        return (
+          <PendingApprovals
+            token={token}
+            myApprovalsOnly={false}
+            onApprovalComplete={() => setCalendarRefreshKey(prev => prev + 1)}
+          />
+        )
+      
       default:
         return null
     }
@@ -364,6 +395,18 @@ function EvaluationsPageContent() {
         }}
         token={token}
         evaluationId={selectedEvaluationId}
+      />
+
+      {/* Execute Evaluation Modal */}
+      <ExecuteEvaluationModal
+        isOpen={isExecuteModalOpen}
+        onClose={() => {
+          setIsExecuteModalOpen(false)
+          setExecuteEvaluationId(null)
+        }}
+        token={token}
+        evaluationId={executeEvaluationId}
+        onSuccess={handleExecuteSuccess}
       />
     </div>
   )
