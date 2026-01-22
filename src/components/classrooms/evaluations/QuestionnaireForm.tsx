@@ -201,7 +201,8 @@ export function QuestionnaireForm({
         throw new Error(data.error?.message || 'Error al cargar el cuestionario')
       }
 
-      const data: QuestionnaireData = await res.json()
+      const json = await res.json()
+      const data: QuestionnaireData = json.data
       setQuestionnaireData(data)
 
       // Initialize responses from existing draft or empty
