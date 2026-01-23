@@ -21,7 +21,7 @@ export type { TrendChartProps, TrendDataPoint, TrendChartWithHeaderProps } from 
 export { EvaluationReports } from './EvaluationReports'
 export type { EvaluationReportsProps } from './EvaluationReports'
 export { QuestionnaireForm } from './QuestionnaireForm'
-export type { QuestionnaireFormProps } from './QuestionnaireForm'
+export type { QuestionnaireFormProps, AssignmentError } from './QuestionnaireForm'
 export { ExecuteEvaluationModal } from './ExecuteEvaluationModal'
 export type { ExecuteEvaluationModalProps } from './ExecuteEvaluationModal'
 export { PendingApprovals } from './PendingApprovals'

@@ -334,6 +334,39 @@ export async function POST(
         }
       }
 
+      // Send notification to responsible person if evaluation is completed (not draft)
+      // The responsible person can view the results and provide feedback
+      if (!isDraft) {
+        try {
+          // Check if classroom has a responsible_user_id (linked user account)
+          const classroom = evaluation.classroom as { 
+            name?: string
+            responsible_person?: string
+            responsible_user_id?: number 
+          } | undefined
+          
+          if (classroom?.responsible_user_id) {
+            const classroomName = classroom.name || 'Espacio'
+            const classificationLabel = classification === 'excellent' 
+              ? 'Excelente' 
+              : classification === 'acceptable' 
+                ? 'Aceptable' 
+                : 'Requiere Atención'
+            
+            await notificationOperations.create({
+              user_id: classroom.responsible_user_id,
+              type: 'evaluation_completed_for_space',
+              title: 'Evaluación Completada',
+              message: `Se ha completado una evaluación para "${classroomName}". Resultado: ${result.score_percentage.toFixed(1)}% (${classificationLabel}). Puedes revisar los resultados y proporcionar tu retroalimentación.`,
+            })
+            console.log('[Submit Evaluation API] Notification sent to responsible person:', classroom.responsible_user_id)
+          }
+        } catch (notificationError) {
+          console.error('[Submit Evaluation API] Error sending notification to responsible person:', notificationError)
+          // Don't fail the request if notification fails
+        }
+      }
+
       // Build response
       // Requirement 3.7: Update scheduled evaluation status to completed (handled in evaluationResultOperations)
       // Requirement 3.8: Allow saving as draft

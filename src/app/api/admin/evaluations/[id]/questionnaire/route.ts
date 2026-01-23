@@ -99,6 +99,39 @@ export async function GET(
         )
       }
 
+      // Check if evaluation is assigned to a specific evaluator
+      // If assigned, only that evaluator can execute it
+      if (evaluation.assigned_to) {
+        // Get current user from auth context
+        const authHeader = request.headers.get('authorization')
+        if (authHeader) {
+          const token = authHeader.substring(7)
+          const jwt = await import('jsonwebtoken')
+          const decoded = jwt.default.verify(token, process.env.JWT_SECRET as string) as { userId: number }
+          
+          if (decoded.userId !== evaluation.assigned_to) {
+            // Get assigned user info for the error message
+            const assignedUser = evaluation.assigned_user as { id: number; username: string; full_name?: string } | undefined
+            const assignedName = assignedUser?.full_name || assignedUser?.username || 'otro evaluador'
+            
+            return NextResponse.json(
+              {
+                error: {
+                  code: 'EVALUATION_ASSIGNED_TO_OTHER',
+                  message: `Esta evaluación está asignada a ${assignedName}. Solo el evaluador asignado puede completarla.`,
+                  assigned_to: {
+                    id: evaluation.assigned_to,
+                    name: assignedName,
+                  },
+                  timestamp: new Date().toISOString(),
+                },
+              },
+              { status: 403 }
+            )
+          }
+        }
+      }
+
       // Check if evaluation can be started (must be pending or overdue)
       if (evaluation.status !== 'pending' && evaluation.status !== 'overdue') {
         // If completed, check if there's a draft that can be continued

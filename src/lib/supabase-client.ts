@@ -2425,7 +2425,7 @@ export const scheduledEvaluationOperations = {
       .from('scheduled_evaluations')
       .select(`
         *,
-        classroom:classrooms(id, name, location, responsible_person),
+        classroom:classrooms(id, name, location, responsible_person, responsible_user_id),
         template:evaluation_templates(id, name, space_type),
         assigned_user:users!scheduled_evaluations_assigned_to_fkey(id, username, full_name),
         approver:users!scheduled_evaluations_approver_id_fkey(id, username, full_name)

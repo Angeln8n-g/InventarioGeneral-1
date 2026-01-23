@@ -25,6 +25,17 @@ import type {
 } from '@/types/evaluations'
 
 /**
+ * Assignment error data when evaluation is assigned to another user
+ */
+export interface AssignmentError {
+  assignedTo: {
+    id: number
+    name: string
+  }
+  message: string
+}
+
+/**
  * Props for the QuestionnaireForm component
  */
 export interface QuestionnaireFormProps {
@@ -36,6 +47,8 @@ export interface QuestionnaireFormProps {
   onSuccess?: () => void
   /** Callback when user cancels */
   onCancel?: () => void
+  /** Callback when evaluation is assigned to another user */
+  onAssignmentError?: (error: AssignmentError) => void
 }
 
 /**
@@ -159,7 +172,8 @@ export function QuestionnaireForm({
   evaluationId,
   token,
   onSuccess,
-  onCancel
+  onCancel,
+  onAssignmentError
 }: QuestionnaireFormProps) {
   // Data state
   const [questionnaireData, setQuestionnaireData] = useState<QuestionnaireData | null>(null)
@@ -198,6 +212,18 @@ export function QuestionnaireForm({
 
       if (!res.ok) {
         const data = await res.json()
+        
+        // Check if this is an assignment error (403 with specific code)
+        if (res.status === 403 && data.error?.code === 'EVALUATION_ASSIGNED_TO_OTHER') {
+          if (onAssignmentError) {
+            onAssignmentError({
+              assignedTo: data.error.assigned_to,
+              message: data.error.message
+            })
+            return
+          }
+        }
+        
         throw new Error(data.error?.message || 'Error al cargar el cuestionario')
       }
 
