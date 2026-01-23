@@ -172,13 +172,9 @@ export function useViewTransition(
     let error: Error | undefined;
     
     try {
-      // Timeout protection
-      const timeout = options.timeout || 500;
-      const timeoutPromise = new Promise<void>((_, reject) => {
-        timeoutRef.current = setTimeout(() => {
-          reject(new Error('Transition timeout'));
-        }, timeout);
-      });
+      // Timeout protection - increased for slower navigations
+      // Use a longer timeout to avoid false positives on slow connections
+      const timeout = options.timeout || 3000;
       
       // Ejecutar transición
       if (shouldSkip) {
@@ -186,16 +182,19 @@ export function useViewTransition(
         await callback();
       } else if (supportsViewTransitions() && !adaptiveConfig.shouldSimplify) {
         // View Transitions API nativo
-        await Promise.race([
-          executeViewTransition(callback, transitionType),
-          timeoutPromise,
-        ]);
+        // Wrap in timeout but don't reject - just log warning and continue
+        const timeoutId = setTimeout(() => {
+          console.warn('[ViewTransition] Transition taking longer than expected');
+        }, timeout);
+        
+        try {
+          await executeViewTransition(callback, transitionType);
+        } finally {
+          clearTimeout(timeoutId);
+        }
       } else {
         // Fallback: CSS animation
-        await Promise.race([
-          executeCSSTransition(callback, adaptiveConfig.duration),
-          timeoutPromise,
-        ]);
+        await executeCSSTransition(callback, adaptiveConfig.duration);
       }
       
       success = true;
