@@ -1,23 +1,29 @@
 /**
- * Microsoft Teams Webhook Integration
+ * Microsoft Teams Webhook Integration (Power Automate Workflows)
  * 
  * Este módulo permite enviar notificaciones al sistema de inventario
- * a través de webhooks de Microsoft Teams.
+ * a través de Power Automate Workflows en Microsoft Teams.
+ * 
+ * IMPORTANTE: Microsoft está deprecando los Office 365 Connectors.
+ * Esta implementación usa Adaptive Cards, compatible con Power Automate.
  * 
  * Configuración:
  * 1. En Teams, ve al canal donde quieres recibir notificaciones
- * 2. Click en "..." > "Connectors" > "Incoming Webhook"
- * 3. Configura el nombre y copia la URL del webhook
- * 4. Agrega la URL a tu archivo .env como TEAMS_WEBHOOK_URL
+ * 2. Click en "..." > "Workflows" > "Create a workflow"
+ * 3. Busca "Post to a channel when a webhook request is received"
+ * 4. Configura el workflow y copia la URL del webhook
+ * 5. Agrega la URL a tu archivo .env como TEAMS_WEBHOOK_URL
+ * 
+ * @see https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook
  */
 
-// Colores para diferentes tipos de notificaciones
+// Colores para diferentes tipos de notificaciones (formato hex para Adaptive Cards)
 export const TEAMS_COLORS = {
-  success: '28A745',   // Verde
-  warning: 'FFC107',   // Amarillo
-  error: 'DC3545',     // Rojo
-  info: '0078D4',      // Azul (Teams)
-  primary: 'DA291C',   // Rojo Claro (marca)
+  success: 'good',      // Verde
+  warning: 'warning',   // Amarillo
+  error: 'attention',   // Rojo
+  info: 'accent',       // Azul
+  primary: 'accent',    // Azul (marca)
 } as const
 
 export type TeamsColor = keyof typeof TEAMS_COLORS
@@ -43,22 +49,23 @@ export type TeamsNotificationType =
 interface TeamsNotificationConfig {
   color: TeamsColor
   emoji: string
+  style: 'good' | 'warning' | 'attention' | 'accent' | 'default'
 }
 
 /**
  * Configuración por tipo de notificación
  */
 const NOTIFICATION_CONFIG: Record<TeamsNotificationType, TeamsNotificationConfig> = {
-  evaluation_completed: { color: 'info', emoji: '📋' },
-  evaluation_approved: { color: 'success', emoji: '✅' },
-  evaluation_rejected: { color: 'error', emoji: '❌' },
-  loan_overdue: { color: 'warning', emoji: '⚠️' },
-  loan_created: { color: 'info', emoji: '🔧' },
-  loan_returned: { color: 'success', emoji: '✅' },
-  stock_low: { color: 'warning', emoji: '📦' },
-  reservation_created: { color: 'info', emoji: '📅' },
-  reservation_fulfilled: { color: 'success', emoji: '✅' },
-  general: { color: 'primary', emoji: '📢' },
+  evaluation_completed: { color: 'info', emoji: '📋', style: 'accent' },
+  evaluation_approved: { color: 'success', emoji: '✅', style: 'good' },
+  evaluation_rejected: { color: 'error', emoji: '❌', style: 'attention' },
+  loan_overdue: { color: 'warning', emoji: '⚠️', style: 'warning' },
+  loan_created: { color: 'info', emoji: '🔧', style: 'accent' },
+  loan_returned: { color: 'success', emoji: '✅', style: 'good' },
+  stock_low: { color: 'warning', emoji: '📦', style: 'warning' },
+  reservation_created: { color: 'info', emoji: '📅', style: 'accent' },
+  reservation_fulfilled: { color: 'success', emoji: '✅', style: 'good' },
+  general: { color: 'primary', emoji: '📢', style: 'default' },
 }
 
 /**
@@ -98,26 +105,63 @@ export interface TeamsNotificationOptions {
 }
 
 /**
- * Formato de MessageCard para Teams
- * @see https://docs.microsoft.com/en-us/outlook/actionable-messages/message-card-reference
+ * Adaptive Card element types
  */
-interface TeamsMessageCard {
-  '@type': 'MessageCard'
-  '@context': 'http://schema.org/extensions'
-  themeColor: string
-  summary: string
-  sections: Array<{
-    activityTitle: string
-    activitySubtitle?: string
-    activityImage?: string
-    facts?: Array<{ name: string; value: string }>
-    text?: string
-    markdown: boolean
-  }>
-  potentialAction?: Array<{
-    '@type': 'OpenUri'
-    name: string
-    targets: Array<{ os: 'default'; uri: string }>
+interface AdaptiveCardTextBlock {
+  type: 'TextBlock'
+  text: string
+  weight?: 'Default' | 'Lighter' | 'Bolder'
+  size?: 'Default' | 'Small' | 'Medium' | 'Large' | 'ExtraLarge'
+  color?: 'Default' | 'Dark' | 'Light' | 'Accent' | 'Good' | 'Warning' | 'Attention'
+  wrap?: boolean
+  spacing?: 'None' | 'Small' | 'Default' | 'Medium' | 'Large' | 'ExtraLarge'
+}
+
+interface AdaptiveCardFactSet {
+  type: 'FactSet'
+  facts: Array<{ title: string; value: string }>
+  spacing?: 'None' | 'Small' | 'Default' | 'Medium' | 'Large' | 'ExtraLarge'
+}
+
+interface AdaptiveCardActionOpenUrl {
+  type: 'Action.OpenUrl'
+  title: string
+  url: string
+  style?: 'default' | 'positive' | 'destructive'
+}
+
+interface AdaptiveCardContainer {
+  type: 'Container'
+  items: Array<AdaptiveCardTextBlock | AdaptiveCardFactSet>
+  style?: 'default' | 'emphasis' | 'good' | 'attention' | 'warning' | 'accent'
+  bleed?: boolean
+  spacing?: 'None' | 'Small' | 'Default' | 'Medium' | 'Large' | 'ExtraLarge'
+}
+
+/**
+ * Adaptive Card format for Power Automate Workflows
+ * @see https://adaptivecards.io/explorer/
+ */
+interface AdaptiveCard {
+  type: 'AdaptiveCard'
+  $schema: 'http://adaptivecards.io/schemas/adaptive-card.json'
+  version: '1.4'
+  body: Array<AdaptiveCardTextBlock | AdaptiveCardFactSet | AdaptiveCardContainer>
+  actions?: AdaptiveCardActionOpenUrl[]
+  msteams?: {
+    width: 'Full'
+  }
+}
+
+/**
+ * Wrapper for Power Automate Workflow webhook
+ */
+interface PowerAutomatePayload {
+  type: 'message'
+  attachments: Array<{
+    contentType: 'application/vnd.microsoft.card.adaptive'
+    contentUrl: null
+    content: AdaptiveCard
   }>
 }
 
@@ -132,51 +176,110 @@ function getWebhookUrl(): string | null {
  * Obtiene la URL base de la aplicación
  */
 function getAppBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL 
-    ? `https://${process.env.VERCEL_URL}` 
-    : 'http://localhost:3000'
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`
+  }
+  return 'http://localhost:3000'
 }
 
 /**
- * Construye el payload de MessageCard para Teams
+ * Mapea el estilo de notificación al color de Adaptive Card
  */
-function buildMessageCard(options: TeamsNotificationOptions): TeamsMessageCard {
+function getAdaptiveCardColor(style: string): AdaptiveCardTextBlock['color'] {
+  const colorMap: Record<string, AdaptiveCardTextBlock['color']> = {
+    good: 'Good',
+    warning: 'Warning',
+    attention: 'Attention',
+    accent: 'Accent',
+    default: 'Default',
+  }
+  return colorMap[style] || 'Default'
+}
+
+/**
+ * Construye el payload de Adaptive Card para Power Automate
+ */
+function buildAdaptiveCard(options: TeamsNotificationOptions): PowerAutomatePayload {
   const config = NOTIFICATION_CONFIG[options.type || 'general']
-  const color = options.color ? TEAMS_COLORS[options.color] : TEAMS_COLORS[config.color]
+  const titleColor = getAdaptiveCardColor(config.style)
   
-  const card: TeamsMessageCard = {
-    '@type': 'MessageCard',
-    '@context': 'http://schema.org/extensions',
-    themeColor: color,
-    summary: options.title,
-    sections: [
+  const cardBody: AdaptiveCard['body'] = []
+
+  // Header con emoji y título
+  cardBody.push({
+    type: 'TextBlock',
+    text: `${config.emoji} ${options.title}`,
+    weight: 'Bolder',
+    size: 'Large',
+    color: titleColor,
+    wrap: true,
+  })
+
+  // Mensaje principal
+  cardBody.push({
+    type: 'TextBlock',
+    text: options.message,
+    wrap: true,
+    spacing: 'Medium',
+  })
+
+  // Facts (datos adicionales)
+  if (options.facts && options.facts.length > 0) {
+    cardBody.push({
+      type: 'FactSet',
+      facts: options.facts.map(fact => ({
+        title: fact.name,
+        value: fact.value,
+      })),
+      spacing: 'Medium',
+    })
+  }
+
+  // Construir acciones
+  const actions: AdaptiveCardActionOpenUrl[] = []
+  if (options.actions && options.actions.length > 0) {
+    for (const action of options.actions) {
+      actions.push({
+        type: 'Action.OpenUrl',
+        title: action.name,
+        url: action.url,
+        style: 'positive',
+      })
+    }
+  }
+
+  const adaptiveCard: AdaptiveCard = {
+    type: 'AdaptiveCard',
+    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+    version: '1.4',
+    body: cardBody,
+    msteams: {
+      width: 'Full',
+    },
+  }
+
+  if (actions.length > 0) {
+    adaptiveCard.actions = actions
+  }
+
+  // Wrap in Power Automate format
+  return {
+    type: 'message',
+    attachments: [
       {
-        activityTitle: `${config.emoji} ${options.title}`,
-        text: options.message,
-        markdown: true,
+        contentType: 'application/vnd.microsoft.card.adaptive',
+        contentUrl: null,
+        content: adaptiveCard,
       },
     ],
   }
-
-  // Agregar facts si existen
-  if (options.facts && options.facts.length > 0) {
-    card.sections[0].facts = options.facts
-  }
-
-  // Agregar acciones si existen
-  if (options.actions && options.actions.length > 0) {
-    card.potentialAction = options.actions.map(action => ({
-      '@type': 'OpenUri' as const,
-      name: action.name,
-      targets: [{ os: 'default' as const, uri: action.url }],
-    }))
-  }
-
-  return card
 }
 
 /**
- * Envía una notificación a Microsoft Teams
+ * Envía una notificación a Microsoft Teams via Power Automate Workflow
  * 
  * @param options - Opciones de la notificación
  * @returns true si se envió correctamente, false si falló o no está configurado
@@ -209,7 +312,7 @@ export async function sendTeamsNotification(
   }
 
   try {
-    const payload = buildMessageCard(options)
+    const payload = buildAdaptiveCard(options)
 
     const response = await fetch(webhookUrl, {
       method: 'POST',
@@ -322,16 +425,19 @@ export async function notifyEvaluationCompleted(data: {
     data.classification === 'excellent' ? '🌟' :
     data.classification === 'acceptable' ? '👍' : '⚠️'
 
+  const classificationLabel = 
+    data.classification === 'excellent' ? 'Excelente' : 
+    data.classification === 'acceptable' ? 'Aceptable' : 'Requiere Atención'
+
   return TeamsNotification
     .create('Evaluación Completada')
     .type('evaluation_completed')
     .message(`Se ha completado una evaluación para **${data.classroomName}**`)
     .addFact('Espacio', data.classroomName)
-    .addFact('Ubicación', data.location)
+    .addFact('Ubicación', data.location || 'No especificada')
     .addFact('Evaluador', data.evaluator)
     .addFact('Puntuación', `${data.scorePercentage.toFixed(1)}% ${classificationEmoji}`)
-    .addFact('Clasificación', data.classification === 'excellent' ? 'Excelente' : 
-             data.classification === 'acceptable' ? 'Aceptable' : 'Requiere Atención')
+    .addFact('Clasificación', classificationLabel)
     .addAction('Ver Evaluación', `/admin/classrooms/evaluations`)
     .send()
 }
@@ -347,13 +453,15 @@ export async function notifyEvaluationApproval(data: {
 }): Promise<boolean> {
   const type = data.approved ? 'evaluation_approved' : 'evaluation_rejected'
   const title = data.approved ? 'Evaluación Aprobada' : 'Evaluación Rechazada'
+  const statusText = data.approved ? 'aprobada' : 'rechazada'
   
   const notification = TeamsNotification
     .create(title)
     .type(type)
-    .message(`La evaluación de **${data.classroomName}** ha sido ${data.approved ? 'aprobada' : 'rechazada'}`)
+    .message(`La evaluación de **${data.classroomName}** ha sido ${statusText}`)
     .addFact('Espacio', data.classroomName)
     .addFact('Aprobador', data.approver)
+    .addFact('Estado', data.approved ? '✅ Aprobada' : '❌ Rechazada')
 
   if (data.comments) {
     notification.addFact('Comentarios', data.comments)
@@ -373,11 +481,11 @@ export async function notifyOverdueLoans(data: {
 }): Promise<boolean> {
   const loansList = data.loans
     .slice(0, 5) // Máximo 5 para no hacer el mensaje muy largo
-    .map(l => `- ${l.toolName} (${l.userName}) - Vencido: ${l.dueDate}`)
+    .map(l => `• ${l.toolName} (${l.userName}) - Vencido: ${l.dueDate}`)
     .join('\n')
 
   return TeamsNotification
-    .create(`⚠️ ${data.count} Préstamo(s) Vencido(s)`)
+    .create(`${data.count} Préstamo(s) Vencido(s)`)
     .type('loan_overdue')
     .message(`Hay **${data.count}** préstamo(s) que han excedido su fecha de devolución:\n\n${loansList}`)
     .addFact('Total Vencidos', data.count.toString())
@@ -400,6 +508,7 @@ export async function notifyLowStock(data: {
     .addFact('Artículo', data.itemName)
     .addFact('Cantidad Actual', data.currentQuantity.toString())
     .addFact('Mínimo Requerido', data.minimumQuantity.toString())
+    .addFact('Estado', '⚠️ Requiere reabastecimiento')
     .addAction('Ver Inventario', `/admin/consumables`)
     .send()
 }
