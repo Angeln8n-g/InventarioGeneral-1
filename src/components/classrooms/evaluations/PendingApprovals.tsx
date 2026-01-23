@@ -11,7 +11,9 @@ import {
   MessageSquare,
   Building2,
   User,
-  Calendar
+  Calendar,
+  AlertTriangle,
+  UserCheck
 } from 'lucide-react'
 import { Dialog } from '@/components/ui/Dialog'
 import { ScoreDisplay } from './ScoreDisplay'
@@ -123,6 +125,9 @@ export function PendingApprovals({
   const [approvalDecision, setApprovalDecision] = useState<'approved' | 'rejected' | null>(null)
   const [approvalComments, setApprovalComments] = useState('')
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false)
+  
+  // Approver assignment error state
+  const [approverError, setApproverError] = useState<{ name: string; id: number } | null>(null)
 
   /**
    * Fetches pending evaluations from the API
@@ -233,7 +238,14 @@ export function PendingApprovals({
         onApprovalComplete?.()
       } else {
         const data = await res.json()
-        setError(data.error?.message || 'Error al procesar la aprobación')
+        
+        // Check if this is an approver assignment error
+        if (res.status === 403 && data.error?.code === 'APPROVAL_ASSIGNED_TO_OTHER') {
+          setIsApprovalModalOpen(false)
+          setApproverError(data.error.assigned_to)
+        } else {
+          setError(data.error?.message || 'Error al procesar la aprobación')
+        }
       }
     } catch (err) {
       console.error('Error submitting approval:', err)
@@ -354,7 +366,8 @@ export function PendingApprovals({
               {/* Score */}
               <div className="flex items-center gap-4">
                 <ScoreDisplay
-                  percentage={evaluation.score_percentage}
+                  totalScore={evaluation.total_score}
+                  maxScore={evaluation.max_possible_score}
                   size="md"
                 />
                 
@@ -412,7 +425,11 @@ export function PendingApprovals({
             {/* Scores */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
-                <ScoreDisplay percentage={selectedEvaluation.score_percentage} size="lg" />
+                <ScoreDisplay 
+                  totalScore={selectedEvaluation.total_score}
+                  maxScore={selectedEvaluation.max_possible_score}
+                  size="lg" 
+                />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total</p>
               </div>
               <div className="text-center">
@@ -582,6 +599,48 @@ export function PendingApprovals({
                   Confirmar Rechazo
                 </>
               )}
+            </button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Approver assignment error modal */}
+      <Dialog
+        isOpen={!!approverError}
+        onClose={() => {
+          setApproverError(null)
+          setSelectedEvaluation(null)
+        }}
+        title="Aprobación Asignada"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-col items-center text-center py-4">
+            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mb-4">
+              <UserCheck className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+            </div>
+            <p className="text-gray-700 dark:text-gray-300 mb-4">
+              Esta evaluación está asignada para aprobación a otro administrador. Solo el aprobador asignado puede aprobar o rechazar esta evaluación.
+            </p>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg px-4 py-3 w-full">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                Aprobador asignado:
+              </p>
+              <p className="font-medium text-gray-900 dark:text-white">
+                {approverError?.name}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-center pt-2">
+            <button
+              onClick={() => {
+                setApproverError(null)
+                setSelectedEvaluation(null)
+              }}
+              className="px-6 py-2 text-sm font-medium text-white bg-claro-red rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Entendido
             </button>
           </div>
         </div>

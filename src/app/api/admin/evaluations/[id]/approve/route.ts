@@ -163,6 +163,33 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         )
       }
 
+      // Get scheduled evaluation to check approver assignment
+      const scheduledEvaluation = await scheduledEvaluationOperations.getById(
+        currentResult.scheduled_evaluation_id
+      )
+
+      // Check if evaluation has an assigned approver and if current user is that approver
+      if (scheduledEvaluation?.approver_id && scheduledEvaluation.approver_id !== auth.user.id) {
+        // Get approver info for the error message
+        const approver = scheduledEvaluation.approver as { id: number; username: string; full_name?: string } | undefined
+        const approverName = approver?.full_name || approver?.username || 'otro administrador'
+        
+        return NextResponse.json(
+          {
+            error: {
+              code: 'APPROVAL_ASSIGNED_TO_OTHER',
+              message: `Esta evaluación está asignada para aprobación a ${approverName}. Solo el aprobador asignado puede aprobar o rechazar esta evaluación.`,
+              assigned_to: {
+                id: scheduledEvaluation.approver_id,
+                name: approverName,
+              },
+              timestamp: new Date().toISOString(),
+            },
+          },
+          { status: 403 }
+        )
+      }
+
       // Check if already approved/rejected
       if (currentResult.approval_status !== 'pending') {
         return NextResponse.json(
@@ -180,14 +207,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // Update the evaluation result with approval
       const updatedResult = await evaluationResultOperations.updateApproval(
         evaluationId,
-        decision as ApprovalStatus,
+        decision as 'approved' | 'rejected',
         auth.user.id,
         comments
-      )
-
-      // Get scheduled evaluation details for notification
-      const scheduledEvaluation = await scheduledEvaluationOperations.getById(
-        currentResult.scheduled_evaluation_id
       )
 
       // Send notification to the evaluator
