@@ -119,6 +119,12 @@ export function NotificationsDropdown({
                notifType.includes('rechazada')) {
       onClose()
       router.push('/admin/classrooms/evaluations?tab=aprobaciones')
+    } else if (notifType.includes('evaluation_completed_for_space') ||
+               notifType.includes('evaluación completada') ||
+               notifType.includes('evaluation_feedback')) {
+      // Navigate to my spaces evaluations page for responsible persons
+      onClose()
+      router.push('/my-spaces/evaluations')
     }
     // Add more navigation rules as needed
   }, [onMarkAsRead, onClose, router])
