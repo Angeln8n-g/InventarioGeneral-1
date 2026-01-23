@@ -5,11 +5,13 @@ import {
   evaluationResultOperations,
   auditLogOperations,
   notificationOperations,
+  userOperations,
 } from '@/lib/supabase-client'
 import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
 import { calculateScore } from '@/utils/evaluation-scoring'
+import { notifyEvaluationCompleted } from '@/lib/teams-webhook'
 import type {
   ResponseType,
   TemplateQuestion,
@@ -364,6 +366,24 @@ export async function POST(
         } catch (notificationError) {
           console.error('[Submit Evaluation API] Error sending notification to responsible person:', notificationError)
           // Don't fail the request if notification fails
+        }
+
+        // Send Teams notification (if configured)
+        try {
+          const evaluatorUser = await userOperations.getById(auth.user.id)
+          const classroomData = evaluation.classroom as { name?: string; location?: string } | undefined
+          
+          await notifyEvaluationCompleted({
+            classroomName: classroomData?.name || 'Espacio',
+            location: classroomData?.location || '',
+            evaluator: evaluatorUser?.full_name || evaluatorUser?.username || 'Evaluador',
+            scorePercentage: result.score_percentage,
+            classification,
+            evaluationId: result.id,
+          })
+        } catch (teamsError) {
+          console.error('[Submit Evaluation API] Error sending Teams notification:', teamsError)
+          // Don't fail the request if Teams notification fails
         }
       }
 

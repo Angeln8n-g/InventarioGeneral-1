@@ -3,12 +3,13 @@ import {
   evaluationResultOperations, 
   scheduledEvaluationOperations,
   notificationOperations,
-  auditLogOperations 
+  auditLogOperations,
+  userOperations,
 } from '@/lib/supabase-client'
 import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
-import type { ApprovalStatus } from '@/types/evaluations'
+import { notifyEvaluationApproval } from '@/lib/teams-webhook'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -214,8 +215,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
       // Send notification to the evaluator
       if (scheduledEvaluation) {
+        const classroomName = scheduledEvaluation.classroom?.name || 'Espacio'
+        
         try {
-          const classroomName = scheduledEvaluation.classroom?.name || 'Espacio'
           const notificationType = decision === 'approved' ? 'evaluation_approved' : 'evaluation_rejected'
           const title = decision === 'approved' 
             ? 'Evaluación Aprobada' 
@@ -232,6 +234,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           })
         } catch (notificationError) {
           console.error('[Evaluation Approve API] Error sending notification:', notificationError)
+        }
+
+        // Send Teams notification (if configured)
+        try {
+          const approverUser = await userOperations.getById(auth.user.id)
+          await notifyEvaluationApproval({
+            classroomName,
+            approved: decision === 'approved',
+            approver: approverUser?.full_name || approverUser?.username || 'Administrador',
+            comments: comments || undefined,
+          })
+        } catch (teamsError) {
+          console.error('[Evaluation Approve API] Error sending Teams notification:', teamsError)
         }
       }
 
