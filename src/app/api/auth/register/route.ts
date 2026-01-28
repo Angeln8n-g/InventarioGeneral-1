@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { userOperations, auditLogOperations } from '@/lib/supabase-client'
 import { createUserSchema } from '@/utils/validation'
 import bcrypt from 'bcryptjs'
-import { query } from '@/lib/db/client'
+import { supabase } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,42 +22,60 @@ export async function POST(request: NextRequest) {
     
     // Determine role_id
     let roleId: number | undefined
+    let roleName: string = 'user'
     
     if (validatedData.role_id) {
       // Use provided role_id
       roleId = validatedData.role_id
       
-      // Verify role exists
-      const roleCheck = await query('SELECT id FROM roles WHERE id = $1', [roleId])
-      if (roleCheck.rows.length === 0) {
+      // Verify role exists and get name
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id, name')
+        .eq('id', roleId)
+        .single()
+      
+      if (roleError || !roleData) {
         return NextResponse.json(
           { error: { code: 'VALIDATION_ERROR', message: 'Invalid role_id' } },
           { status: 400 }
         )
       }
+      
+      roleName = roleData.name
     } else if (validatedData.role) {
       // Legacy: convert role string to role_id
-      const roleName = validatedData.role
-      const roleResult = await query('SELECT id FROM roles WHERE name = $1', [roleName])
+      roleName = validatedData.role
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', roleName)
+        .single()
       
-      if (roleResult.rows.length === 0) {
+      if (roleError || !roleData) {
         return NextResponse.json(
           { error: { code: 'VALIDATION_ERROR', message: `Role '${roleName}' not found` } },
           { status: 400 }
         )
       }
       
-      roleId = roleResult.rows[0].id
+      roleId = roleData.id
     } else {
       // Default to 'user' role
-      const roleResult = await query('SELECT id FROM roles WHERE name = $1', ['user'])
-      if (roleResult.rows.length === 0) {
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', 'user')
+        .single()
+      
+      if (roleError || !roleData) {
         return NextResponse.json(
           { error: { code: 'INTERNAL_ERROR', message: 'Default user role not found' } },
           { status: 500 }
         )
       }
-      roleId = roleResult.rows[0].id
+      
+      roleId = roleData.id
     }
     
     // Hash password
@@ -65,24 +83,25 @@ export async function POST(request: NextRequest) {
     const password_hash = await bcrypt.hash(validatedData.password, saltRounds)
     
     // Create user with role_id
-    const result = await query(
-      `INSERT INTO users (username, email, password_hash, full_name, role_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, username, email, full_name, role_id, created_at, updated_at`,
-      [
-        validatedData.username,
-        validatedData.email || `${validatedData.username}@example.com`,
+    const { data: user, error: createError } = await supabase
+      .from('users')
+      .insert({
+        username: validatedData.username,
+        email: validatedData.email || `${validatedData.username}@example.com`,
         password_hash,
-        validatedData.full_name,
-        roleId
-      ]
-    )
+        full_name: validatedData.full_name,
+        role_id: roleId
+      })
+      .select('id, username, email, full_name, role_id, created_at, updated_at')
+      .single()
     
-    const user = result.rows[0]
-    
-    // Get role name for audit log
-    const roleNameResult = await query('SELECT name FROM roles WHERE id = $1', [roleId])
-    const roleName = roleNameResult.rows[0]?.name || 'unknown'
+    if (createError || !user) {
+      console.error('Error creating user:', createError)
+      return NextResponse.json(
+        { error: { code: 'INTERNAL_ERROR', message: 'Failed to create user' } },
+        { status: 500 }
+      )
+    }
     
     // Create audit log
     try {
