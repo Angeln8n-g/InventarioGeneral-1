@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSelector } from 'react-redux'
+import { RootState } from '@/app/store'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { useRequireAdmin } from '@/hooks/useAuth'
 import AppLayout from '@/components/layout/AppLayout'
@@ -16,6 +18,7 @@ interface Role {
 
 export default function NewUserPage() {
   const router = useRouter()
+  const token = useSelector((state: RootState) => state.auth.token)
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useRequireAdmin()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,11 +37,24 @@ export default function NewUserPage() {
   // Cargar roles disponibles
   useEffect(() => {
     const fetchRoles = async () => {
+      if (!token) {
+        setError('No hay token de autenticación')
+        setIsLoadingRoles(false)
+        return
+      }
+
       try {
-        const response = await fetch('/api/admin/roles')
+        const response = await fetch('/api/admin/roles', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        })
+        
         if (!response.ok) {
           throw new Error('Error al cargar roles')
         }
+        
         const data = await response.json()
         if (data.success && data.data) {
           setRoles(data.data)
@@ -55,9 +71,10 @@ export default function NewUserPage() {
       }
     }
 
-    if (isAuthenticated && isAdmin) {
+    if (isAuthenticated && isAdmin && token) {
       fetchRoles()
     }
+  }, [isAuthenticated, isAdmin, token])
   }, [isAuthenticated, isAdmin])
 
   const handleSubmit = async (e: React.FormEvent) => {
