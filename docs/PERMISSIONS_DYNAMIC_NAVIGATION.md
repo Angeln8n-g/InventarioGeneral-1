@@ -68,15 +68,33 @@ Hook especializado para control de acceso a secciones:
 
 ```mermaid
 graph TD
-    A[Usuario accede a página] --> B{¿Tiene PermissionsContext?}
-    B -->|Sí| C[Usar permisos dinámicos de BD]
-    B -->|No| D[Usar permisos estáticos hardcodeados]
-    C --> E[Verificar permiso específico]
-    D --> E
-    E --> F{¿Tiene permiso?}
-    F -->|Sí| G[Mostrar elemento]
-    F -->|No| H[Ocultar elemento]
+    A[Usuario accede a página] --> B{¿Es Admin?}
+    B -->|Sí| C[Acceso completo - Retornar TRUE]
+    B -->|No| D{¿Tiene PermissionsContext?}
+    D -->|Sí| E[Usar permisos dinámicos de BD]
+    D -->|No| F[Usar permisos estáticos hardcodeados]
+    E --> G[Verificar permiso específico]
+    F --> G
+    G --> H{¿Tiene permiso?}
+    H -->|Sí| I[Mostrar elemento]
+    H -->|No| J[Ocultar elemento]
 ```
+
+## Regla Importante: Usuarios Admin
+
+**Los usuarios con rol `admin` tienen acceso completo a TODAS las funcionalidades del sistema automáticamente.**
+
+Esto significa que:
+- ✅ No necesitan permisos específicos asignados
+- ✅ Siempre retornan `true` en todas las verificaciones de permisos
+- ✅ Pueden acceder a todas las secciones del sistema
+- ✅ Pueden gestionar permisos de otros usuarios sin restricciones
+- ✅ Ven todos los elementos del dashboard y navegación
+
+Esta regla se aplica en:
+1. **PermissionsContext**: Las funciones `hasPermission`, `hasAnyPermission` y `hasAllPermissions` verifican primero si `userRole === 'admin'`
+2. **Funciones estáticas**: Las funciones en `src/lib/permissions.ts` verifican primero si `user.role === 'admin'`
+3. **Hook usePermissions**: Hereda el comportamiento de ambos sistemas
 
 ## Permisos Definidos
 
@@ -155,6 +173,16 @@ const canManageTools = hasPermission(PERMISSIONS.ADMIN_MANAGE_TOOLS)
 
 Para probar el sistema de permisos:
 
+### Testing con Usuario Admin
+1. **Iniciar sesión como admin** (ej: angel_santana)
+2. **Verificar acceso completo** a:
+   - Todas las opciones de navegación
+   - Todos los botones del dashboard admin
+   - Todas las tarjetas de estadísticas
+   - Todas las opciones de configuración avanzada
+3. **Confirmar que no hay restricciones** - El admin debe ver TODO
+
+### Testing con Usuario con Rol Personalizado
 1. **Crear un usuario con rol personalizado** en `/admin/permissions`
 2. **Asignar permisos específicos** al rol
 3. **Iniciar sesión con ese usuario**
@@ -164,6 +192,13 @@ Para probar el sistema de permisos:
    - Botones del header
    - Tarjetas de estadísticas
    - Configuración avanzada
+
+### Testing con Usuario Regular
+1. **Iniciar sesión como usuario regular** (rol: user)
+2. **Verificar acceso limitado** a:
+   - Solo secciones de usuario (Dashboard, Mis Préstamos, Consumibles, Perfil)
+   - Sin acceso al panel admin
+   - Sin opciones de gestión
 
 ## Próximos Pasos
 
