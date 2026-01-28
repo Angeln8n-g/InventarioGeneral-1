@@ -29,10 +29,18 @@ export const createUserSchema = yup.object({
     .required('Full name is required')
     .min(2, 'Full name must be at least 2 characters')
     .max(100, 'Full name must be less than 100 characters'),
+  // Support both legacy role (string) and new role_id (number) for backward compatibility
   role: yup
     .string()
     .oneOf(['user', 'admin'], 'Role must be user or admin')
-    .default('user'),
+    .optional(),
+  role_id: yup
+    .number()
+    .positive('Role ID must be a positive number')
+    .integer('Role ID must be an integer')
+    .optional(),
+}).test('role-or-role-id', 'Either role or role_id must be provided', function(value) {
+  return !!(value.role || value.role_id);
 })
 
 export const updateUserSchema = yup.object({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { userOperations, auditLogOperations } from '@/lib/supabase-client'
 import { createUserSchema } from '@/utils/validation'
 import bcrypt from 'bcryptjs'
+import { query } from '@/lib/db/client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,18 +20,69 @@ export async function POST(request: NextRequest) {
       )
     }
     
+    // Determine role_id
+    let roleId: number | undefined
+    
+    if (validatedData.role_id) {
+      // Use provided role_id
+      roleId = validatedData.role_id
+      
+      // Verify role exists
+      const roleCheck = await query('SELECT id FROM roles WHERE id = $1', [roleId])
+      if (roleCheck.rows.length === 0) {
+        return NextResponse.json(
+          { error: { code: 'VALIDATION_ERROR', message: 'Invalid role_id' } },
+          { status: 400 }
+        )
+      }
+    } else if (validatedData.role) {
+      // Legacy: convert role string to role_id
+      const roleName = validatedData.role
+      const roleResult = await query('SELECT id FROM roles WHERE name = $1', [roleName])
+      
+      if (roleResult.rows.length === 0) {
+        return NextResponse.json(
+          { error: { code: 'VALIDATION_ERROR', message: `Role '${roleName}' not found` } },
+          { status: 400 }
+        )
+      }
+      
+      roleId = roleResult.rows[0].id
+    } else {
+      // Default to 'user' role
+      const roleResult = await query('SELECT id FROM roles WHERE name = $1', ['user'])
+      if (roleResult.rows.length === 0) {
+        return NextResponse.json(
+          { error: { code: 'INTERNAL_ERROR', message: 'Default user role not found' } },
+          { status: 500 }
+        )
+      }
+      roleId = roleResult.rows[0].id
+    }
+    
     // Hash password
     const saltRounds = 12
     const password_hash = await bcrypt.hash(validatedData.password, saltRounds)
     
-    // Create user
-    const user = await userOperations.create({
-      username: validatedData.username,
-      email: validatedData.email || `${validatedData.username}@example.com`,
-      password_hash,
-      full_name: validatedData.full_name,
-      role: validatedData.role || 'user',
-    })
+    // Create user with role_id
+    const result = await query(
+      `INSERT INTO users (username, email, password_hash, full_name, role_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, username, email, full_name, role_id, created_at, updated_at`,
+      [
+        validatedData.username,
+        validatedData.email || `${validatedData.username}@example.com`,
+        password_hash,
+        validatedData.full_name,
+        roleId
+      ]
+    )
+    
+    const user = result.rows[0]
+    
+    // Get role name for audit log
+    const roleNameResult = await query('SELECT name FROM roles WHERE id = $1', [roleId])
+    const roleName = roleNameResult.rows[0]?.name || 'unknown'
     
     // Create audit log
     try {
@@ -42,7 +94,8 @@ export async function POST(request: NextRequest) {
         new_values: { 
           username: user.username, 
           email: user.email, 
-          role: user.role,
+          role_id: user.role_id,
+          role_name: roleName,
           created_at: user.created_at 
         },
         ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
@@ -54,10 +107,11 @@ export async function POST(request: NextRequest) {
     }
     
     // Return user data (without password)
-    const { password_hash: _password_hash, ...userWithoutPassword } = user
-    
     return NextResponse.json({
-      user: userWithoutPassword,
+      user: {
+        ...user,
+        role: roleName // Include role name for compatibility
+      },
       message: 'User registered successfully'
     }, { status: 201 })
     
