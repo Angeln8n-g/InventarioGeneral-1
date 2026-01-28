@@ -200,82 +200,33 @@ function getAdaptiveCardColor(style: string): AdaptiveCardTextBlock['color'] {
 }
 
 /**
- * Construye el payload de Adaptive Card para Power Automate
+ * Construye el payload de texto simple para Power Automate
+ * Este formato es más compatible con los workflows de Teams
  */
-function buildAdaptiveCard(options: TeamsNotificationOptions): PowerAutomatePayload {
+function buildTextPayload(options: TeamsNotificationOptions): { text: string } {
   const config = NOTIFICATION_CONFIG[options.type || 'general']
-  const titleColor = getAdaptiveCardColor(config.style)
   
-  const cardBody: AdaptiveCard['body'] = []
+  // Construir mensaje con formato de texto
+  let text = `${config.emoji} **${options.title}**\n\n`
+  text += `${options.message}\n`
 
-  // Header con emoji y título
-  cardBody.push({
-    type: 'TextBlock',
-    text: `${config.emoji} ${options.title}`,
-    weight: 'Bolder',
-    size: 'Large',
-    color: titleColor,
-    wrap: true,
-  })
-
-  // Mensaje principal
-  cardBody.push({
-    type: 'TextBlock',
-    text: options.message,
-    wrap: true,
-    spacing: 'Medium',
-  })
-
-  // Facts (datos adicionales)
+  // Agregar facts como lista
   if (options.facts && options.facts.length > 0) {
-    cardBody.push({
-      type: 'FactSet',
-      facts: options.facts.map(fact => ({
-        title: fact.name,
-        value: fact.value,
-      })),
-      spacing: 'Medium',
-    })
-  }
-
-  // Construir acciones
-  const actions: AdaptiveCardActionOpenUrl[] = []
-  if (options.actions && options.actions.length > 0) {
-    for (const action of options.actions) {
-      actions.push({
-        type: 'Action.OpenUrl',
-        title: action.name,
-        url: action.url,
-        style: 'positive',
-      })
+    text += '\n'
+    for (const fact of options.facts) {
+      text += `• **${fact.name}:** ${fact.value}\n`
     }
   }
 
-  const adaptiveCard: AdaptiveCard = {
-    type: 'AdaptiveCard',
-    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-    version: '1.4',
-    body: cardBody,
-    msteams: {
-      width: 'Full',
-    },
+  // Agregar enlaces de acciones
+  if (options.actions && options.actions.length > 0) {
+    text += '\n'
+    for (const action of options.actions) {
+      text += `🔗 [${action.name}](${action.url})\n`
+    }
   }
 
-  if (actions.length > 0) {
-    adaptiveCard.actions = actions
-  }
-
-  // Wrap in Power Automate format
-  return {
-    type: 'message',
-    attachments: [
-      {
-        contentType: 'application/vnd.microsoft.card.adaptive',
-        contentUrl: null,
-        content: adaptiveCard,
-      },
-    ],
-  }
+  return { text }
 }
 
 /**
@@ -312,7 +263,7 @@ export async function sendTeamsNotification(
   }
 
   try {
-    const payload = buildAdaptiveCard(options)
+    const payload = buildTextPayload(options)
 
     const response = await fetch(webhookUrl, {
       method: 'POST',
