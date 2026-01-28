@@ -1,6 +1,7 @@
 import type { User } from '@/types/database'
 import type { AuthUser } from '@/types/auth'
 import type { AuthenticatedUser } from './auth-middleware'
+import type { PermissionDefinition } from '@/types/permissions'
 
 // Union type for all user types that can be used for permission checking
 type PermissionUser = AuthUser | User | AuthenticatedUser | null
@@ -62,6 +63,22 @@ export const PERMISSIONS = {
   SYSTEM_CONFIGURE: 'system:configure',
   SYSTEM_BACKUP: 'system:backup',
   SYSTEM_MAINTENANCE: 'system:maintenance',
+  
+  // Permission management (new for dynamic permissions system)
+  ADMIN_MANAGE_PERMISSIONS: 'admin:manage_permissions',
+  
+  // Section access permissions
+  SECTIONS_DASHBOARD: 'sections:dashboard',
+  SECTIONS_TOOLS: 'sections:tools',
+  SECTIONS_CONSUMABLES: 'sections:consumables',
+  SECTIONS_MY_LOANS: 'sections:my_loans',
+  SECTIONS_MY_SPACES: 'sections:my_spaces',
+  SECTIONS_PROFILE: 'sections:profile',
+  
+  // Admin section permissions
+  ADMIN_MANAGE_ELECTRONICS: 'admin:manage_electronics',
+  ADMIN_MANAGE_CLASSROOMS: 'admin:manage_classrooms',
+  ADMIN_MANAGE_ASSIGNMENTS: 'admin:manage_assignments',
 } as const
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
@@ -86,6 +103,14 @@ const USER_PERMISSIONS: Permission[] = [
   
   // Notification permissions
   PERMISSIONS.NOTIFICATIONS_VIEW_OWN,
+  
+  // Section access permissions (user sections)
+  PERMISSIONS.SECTIONS_DASHBOARD,
+  PERMISSIONS.SECTIONS_TOOLS,
+  PERMISSIONS.SECTIONS_CONSUMABLES,
+  PERMISSIONS.SECTIONS_MY_LOANS,
+  PERMISSIONS.SECTIONS_MY_SPACES,
+  PERMISSIONS.SECTIONS_PROFILE,
 ]
 
 // Role-based permission mapping
@@ -142,12 +167,100 @@ export const ROLE_PERMISSIONS: Record<User['role'], Permission[]> = {
     PERMISSIONS.ADMIN_MANAGE_CONSUMABLES,
     PERMISSIONS.ADMIN_MANAGE_LOANS,
     PERMISSIONS.ADMIN_MANAGE_CATEGORIES,
+    
+    // Permission management (new for dynamic permissions system)
+    PERMISSIONS.ADMIN_MANAGE_PERMISSIONS,
+    
+    // Admin section permissions
+    PERMISSIONS.ADMIN_MANAGE_ELECTRONICS,
+    PERMISSIONS.ADMIN_MANAGE_CLASSROOMS,
+    PERMISSIONS.ADMIN_MANAGE_ASSIGNMENTS,
   ],
 }
+
+/**
+ * Permission definitions with metadata for display in admin UI
+ * Organized by category as per Requirements 2.6
+ * @see Requirements 8.1, 8.4 - Maintain compatibility with existing permissions
+ */
+export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
+  // Tools category
+  { key: PERMISSIONS.TOOLS_VIEW, name: 'Ver herramientas', description: 'Ver catálogo de herramientas', category: 'tools' },
+  { key: PERMISSIONS.TOOLS_CREATE, name: 'Crear herramientas', description: 'Agregar nuevas herramientas al inventario', category: 'tools' },
+  { key: PERMISSIONS.TOOLS_UPDATE, name: 'Actualizar herramientas', description: 'Modificar información de herramientas existentes', category: 'tools' },
+  { key: PERMISSIONS.TOOLS_DELETE, name: 'Eliminar herramientas', description: 'Eliminar herramientas del inventario', category: 'tools' },
+  { key: PERMISSIONS.TOOLS_ADJUST_STATUS, name: 'Ajustar estado', description: 'Cambiar el estado de disponibilidad de herramientas', category: 'tools' },
+  { key: PERMISSIONS.TOOLS_GENERATE_QR, name: 'Generar QR', description: 'Generar códigos QR para herramientas', category: 'tools' },
+  
+  // Loans category
+  { key: PERMISSIONS.LOANS_VIEW_OWN, name: 'Ver préstamos propios', description: 'Ver historial de préstamos propios', category: 'loans' },
+  { key: PERMISSIONS.LOANS_VIEW_ALL, name: 'Ver todos los préstamos', description: 'Ver historial de préstamos de todos los usuarios', category: 'loans' },
+  { key: PERMISSIONS.LOANS_CREATE, name: 'Crear préstamos', description: 'Solicitar préstamos de herramientas', category: 'loans' },
+  { key: PERMISSIONS.LOANS_RETURN_OWN, name: 'Devolver propios', description: 'Devolver herramientas prestadas propias', category: 'loans' },
+  { key: PERMISSIONS.LOANS_RETURN_ANY, name: 'Devolver cualquiera', description: 'Devolver herramientas de cualquier usuario', category: 'loans' },
+  { key: PERMISSIONS.LOANS_EXTEND, name: 'Extender préstamos', description: 'Extender la duración de préstamos', category: 'loans' },
+  { key: PERMISSIONS.LOANS_OVERRIDE, name: 'Sobrescribir préstamos', description: 'Sobrescribir reglas de préstamos', category: 'loans' },
+  
+  // Consumables category
+  { key: PERMISSIONS.CONSUMABLES_VIEW, name: 'Ver consumibles', description: 'Ver catálogo de consumibles', category: 'consumables' },
+  { key: PERMISSIONS.CONSUMABLES_REQUEST, name: 'Solicitar consumibles', description: 'Solicitar consumibles del inventario', category: 'consumables' },
+  { key: PERMISSIONS.CONSUMABLES_MANAGE_STOCK, name: 'Gestionar stock', description: 'Administrar inventario de consumibles', category: 'consumables' },
+  { key: PERMISSIONS.CONSUMABLES_FULFILL_REQUESTS, name: 'Cumplir solicitudes', description: 'Aprobar y entregar solicitudes de consumibles', category: 'consumables' },
+  
+  // Admin category
+  { key: PERMISSIONS.ADMIN_VIEW_DASHBOARD, name: 'Ver dashboard admin', description: 'Acceder al panel de administración', category: 'admin' },
+  { key: PERMISSIONS.ADMIN_MANAGE_ITEMS, name: 'Gestionar items', description: 'Administrar items del sistema', category: 'admin' },
+  { key: PERMISSIONS.ADMIN_MANAGE_TOOLS, name: 'Gestionar herramientas', description: 'Administrar herramientas desde panel admin', category: 'admin' },
+  { key: PERMISSIONS.ADMIN_MANAGE_CONSUMABLES, name: 'Gestionar consumibles', description: 'Administrar consumibles desde panel admin', category: 'admin' },
+  { key: PERMISSIONS.ADMIN_MANAGE_LOANS, name: 'Gestionar préstamos', description: 'Administrar préstamos desde panel admin', category: 'admin' },
+  { key: PERMISSIONS.ADMIN_MANAGE_CATEGORIES, name: 'Gestionar categorías', description: 'Administrar categorías del sistema', category: 'admin' },
+  { key: PERMISSIONS.ADMIN_MANAGE_PERMISSIONS, name: 'Gestionar permisos', description: 'Administrar roles y permisos del sistema', category: 'admin' },
+  { key: PERMISSIONS.ADMIN_MANAGE_ELECTRONICS, name: 'Gestionar electrónicos', description: 'Administrar equipos electrónicos', category: 'admin' },
+  { key: PERMISSIONS.ADMIN_MANAGE_CLASSROOMS, name: 'Gestionar aulas', description: 'Administrar aulas y espacios', category: 'admin' },
+  { key: PERMISSIONS.ADMIN_MANAGE_ASSIGNMENTS, name: 'Gestionar asignaciones', description: 'Administrar asignaciones de recursos', category: 'admin' },
+  
+  // Users category
+  { key: PERMISSIONS.USERS_VIEW_OWN, name: 'Ver perfil propio', description: 'Ver información del perfil propio', category: 'users' },
+  { key: PERMISSIONS.USERS_VIEW_ALL, name: 'Ver todos los usuarios', description: 'Ver información de todos los usuarios', category: 'users' },
+  { key: PERMISSIONS.USERS_CREATE, name: 'Crear usuarios', description: 'Crear nuevos usuarios en el sistema', category: 'users' },
+  { key: PERMISSIONS.USERS_UPDATE_OWN, name: 'Actualizar perfil propio', description: 'Modificar información del perfil propio', category: 'users' },
+  { key: PERMISSIONS.USERS_UPDATE_ANY, name: 'Actualizar cualquier usuario', description: 'Modificar información de cualquier usuario', category: 'users' },
+  { key: PERMISSIONS.USERS_DELETE, name: 'Eliminar usuarios', description: 'Eliminar usuarios del sistema', category: 'users' },
+  { key: PERMISSIONS.USERS_MANAGE, name: 'Gestionar usuarios', description: 'Administrar usuarios del sistema', category: 'users' },
+  
+  // Notifications category
+  { key: PERMISSIONS.NOTIFICATIONS_VIEW_OWN, name: 'Ver notificaciones propias', description: 'Ver notificaciones propias', category: 'notifications' },
+  { key: PERMISSIONS.NOTIFICATIONS_VIEW_ALL, name: 'Ver todas las notificaciones', description: 'Ver notificaciones de todos los usuarios', category: 'notifications' },
+  { key: PERMISSIONS.NOTIFICATIONS_CREATE, name: 'Crear notificaciones', description: 'Crear nuevas notificaciones', category: 'notifications' },
+  { key: PERMISSIONS.NOTIFICATIONS_SEND, name: 'Enviar notificaciones', description: 'Enviar notificaciones a usuarios', category: 'notifications' },
+  
+  // Audit category
+  { key: PERMISSIONS.AUDIT_VIEW, name: 'Ver auditoría', description: 'Ver registros de auditoría del sistema', category: 'audit' },
+  
+  // Reports category
+  { key: PERMISSIONS.REPORTS_VIEW, name: 'Ver reportes', description: 'Ver reportes del sistema', category: 'reports' },
+  { key: PERMISSIONS.REPORTS_EXPORT, name: 'Exportar reportes', description: 'Exportar reportes a diferentes formatos', category: 'reports' },
+  
+  // System category
+  { key: PERMISSIONS.SYSTEM_CONFIGURE, name: 'Configurar sistema', description: 'Configurar parámetros del sistema', category: 'system' },
+  { key: PERMISSIONS.SYSTEM_BACKUP, name: 'Respaldo del sistema', description: 'Crear y restaurar respaldos del sistema', category: 'system' },
+  { key: PERMISSIONS.SYSTEM_MAINTENANCE, name: 'Mantenimiento', description: 'Realizar tareas de mantenimiento del sistema', category: 'system' },
+  
+  // Section access permissions (not typically shown in matrix, but defined for completeness)
+  { key: PERMISSIONS.SECTIONS_DASHBOARD, name: 'Acceso a Dashboard', description: 'Acceder a la página de dashboard', category: 'system' },
+  { key: PERMISSIONS.SECTIONS_TOOLS, name: 'Acceso a Herramientas', description: 'Acceder a la sección de herramientas', category: 'system' },
+  { key: PERMISSIONS.SECTIONS_CONSUMABLES, name: 'Acceso a Consumibles', description: 'Acceder a la sección de consumibles', category: 'system' },
+  { key: PERMISSIONS.SECTIONS_MY_LOANS, name: 'Acceso a Mis Préstamos', description: 'Acceder a la sección de mis préstamos', category: 'system' },
+  { key: PERMISSIONS.SECTIONS_MY_SPACES, name: 'Acceso a Mis Espacios', description: 'Acceder a la sección de mis espacios', category: 'system' },
+  { key: PERMISSIONS.SECTIONS_PROFILE, name: 'Acceso a Perfil', description: 'Acceder a la página de perfil', category: 'system' },
+]
 
 // Permission checking functions
 export function hasPermission(user: PermissionUser, permission: Permission): boolean {
   if (!user) return false
+  
+  // Admin users always have all permissions
+  if (user.role === 'admin') return true
   
   const rolePermissions = ROLE_PERMISSIONS[user.role] || []
   return rolePermissions.includes(permission)
@@ -156,11 +269,17 @@ export function hasPermission(user: PermissionUser, permission: Permission): boo
 export function hasAnyPermission(user: PermissionUser, permissions: Permission[]): boolean {
   if (!user) return false
   
+  // Admin users always have all permissions
+  if (user.role === 'admin') return true
+  
   return permissions.some(permission => hasPermission(user, permission))
 }
 
 export function hasAllPermissions(user: PermissionUser, permissions: Permission[]): boolean {
   if (!user) return false
+  
+  // Admin users always have all permissions
+  if (user.role === 'admin') return true
   
   return permissions.every(permission => hasPermission(user, permission))
 }
