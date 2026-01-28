@@ -78,42 +78,20 @@ export function useSectionAccess(): UseSectionAccessReturn {
   const { 
     hasPermission, 
     isLoading, 
-    rolePermissions, 
-    userOverrides,
-    isDynamic 
+    isAdmin
   } = usePermissions();
-  
-  // Get effective permissions array for filtering
-  // This combines role permissions with user overrides
-  const effectivePermissions = useMemo(() => {
-    if (!isDynamic) {
-      // Fallback: return empty array if dynamic permissions not loaded
-      // The hasPermission function will handle static permissions
-      return [];
-    }
-    
-    const permSet = new Set<string>();
-    
-    // Add role permissions that are not revoked
-    for (const perm of rolePermissions) {
-      if (!userOverrides.revoked.includes(perm)) {
-        permSet.add(perm);
-      }
-    }
-    
-    // Add granted overrides
-    for (const perm of userOverrides.granted) {
-      permSet.add(perm);
-    }
-    
-    return Array.from(permSet);
-  }, [rolePermissions, userOverrides, isDynamic]);
   
   /**
    * Check if user has access to a specific path
-   * Uses dynamic permissions if available, falls back to hasPermission
+   * Uses hasPermission from usePermissions hook which handles both dynamic and static permissions
+   * Admin users always have access to everything
    */
   const hasAccess = useCallback((path: string): boolean => {
+    // Admin users have access to everything
+    if (isAdmin) {
+      return true;
+    }
+    
     // Public paths are always accessible
     if (isPublicPath(path)) {
       return true;
@@ -126,14 +104,10 @@ export function useSectionAccess(): UseSectionAccessReturn {
       return true;
     }
     
-    // Use dynamic permissions if available
-    if (isDynamic && effectivePermissions.length > 0) {
-      return effectivePermissions.includes(requiredPermission);
-    }
-    
-    // Fallback to hasPermission function
+    // Use hasPermission from usePermissions hook
+    // This automatically handles both dynamic and static permissions
     return hasPermission(requiredPermission as any);
-  }, [effectivePermissions, hasPermission, isDynamic]);
+  }, [hasPermission, isAdmin]);
   
   /**
    * Check if user has access to the current path
@@ -155,30 +129,32 @@ export function useSectionAccess(): UseSectionAccessReturn {
    * @see Requirements 4.3
    */
   const filterNavigation = useCallback((items: NavigationItem[]): NavigationItem[] => {
-    if (isDynamic && effectivePermissions.length > 0) {
-      return filterNavigationByPermissions(items, effectivePermissions);
+    // Admin users see everything
+    if (isAdmin) {
+      return items;
     }
     
-    // Fallback: filter using hasPermission
+    // Filter using hasPermission
     return items.filter(item => {
       if (!item.requiredPermission) return true;
       return hasPermission(item.requiredPermission as any);
     });
-  }, [effectivePermissions, hasPermission, isDynamic]);
+  }, [hasPermission, isAdmin]);
   
   /**
    * Get all accessible sections for the user
    */
   const accessibleSections = useMemo(() => {
-    if (isDynamic && effectivePermissions.length > 0) {
-      return getAccessibleSections(effectivePermissions, true);
+    // Admin users have access to all sections
+    if (isAdmin) {
+      return Object.keys(SECTION_CONFIG);
     }
     
-    // Fallback: check each section using hasPermission
+    // Check each section using hasPermission
     return Object.entries(SECTION_CONFIG)
       .filter(([, config]) => hasPermission(config.requiredPermission as any))
       .map(([path]) => path);
-  }, [effectivePermissions, hasPermission, isDynamic]);
+  }, [hasPermission, isAdmin]);
   
   /**
    * Get all accessible admin sections for the user

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { useRequireAdmin } from '@/hooks/useAuth'
@@ -8,11 +8,19 @@ import AppLayout from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
+interface Role {
+  id: number
+  name: string
+  description: string | null
+}
+
 export default function NewUserPage() {
   const router = useRouter()
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useRequireAdmin()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [roles, setRoles] = useState<Role[]>([])
+  const [isLoadingRoles, setIsLoadingRoles] = useState(true)
 
   const [formData, setFormData] = useState({
     username: '',
@@ -20,20 +28,54 @@ export default function NewUserPage() {
     confirmPassword: '',
     email: '',
     full_name: '',
-    role: 'user',
+    role_id: '',
   })
+
+  // Cargar roles disponibles
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const response = await fetch('/api/admin/roles')
+        if (!response.ok) {
+          throw new Error('Error al cargar roles')
+        }
+        const data = await response.json()
+        if (data.success && data.data) {
+          setRoles(data.data)
+          // Set default role to first available role
+          if (data.data.length > 0) {
+            setFormData(prev => ({ ...prev, role_id: data.data[0].id.toString() }))
+          }
+        }
+      } catch (err) {
+        console.error('Error loading roles:', err)
+        setError('Error al cargar los roles disponibles')
+      } finally {
+        setIsLoadingRoles(false)
+      }
+    }
+
+    if (isAuthenticated && isAdmin) {
+      fetchRoles()
+    }
+  }, [isAuthenticated, isAdmin])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match')
+      setError('Las contraseñas no coinciden')
       return
     }
 
     if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters')
+      setError('La contraseña debe tener al menos 6 caracteres')
+      return
+    }
+
+    if (!formData.role_id) {
+      setError('Debe seleccionar un rol')
       return
     }
 
@@ -48,32 +90,32 @@ export default function NewUserPage() {
           password: formData.password,
           email: formData.email || undefined,
           full_name: formData.full_name,
-          role: formData.role,
+          role_id: parseInt(formData.role_id),
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error?.message || 'Failed to create user')
+        throw new Error(data.error?.message || 'Error al crear usuario')
       }
 
-      router.push('/admin/dashboard')
+      router.push('/admin/users')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      setError(err instanceof Error ? err.message : 'Ocurrió un error')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (authLoading) {
+  if (authLoading || isLoadingRoles) {
     return (
       <ProtectedRoute>
-        <AppLayout title="Add User">
+        <AppLayout title="Agregar Usuario">
           <div className="px-4 py-6">
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-sm text-gray-500 mt-2">Loading...</p>
+              <p className="text-sm text-gray-500 mt-2">Cargando...</p>
             </div>
           </div>
         </AppLayout>
@@ -87,16 +129,16 @@ export default function NewUserPage() {
 
   return (
     <ProtectedRoute>
-      <AppLayout title="Add User">
+      <AppLayout title="Agregar Usuario">
         <div className="px-4 py-6 max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold">Add User</h1>
+            <h1 className="text-2xl font-bold">Agregar Usuario</h1>
             <Button
               onClick={() => router.back()}
               variant="secondary"
               size="sm"
             >
-              Cancel
+              Cancelar
             </Button>
           </div>
 
@@ -110,63 +152,80 @@ export default function NewUserPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-2 text-text-light dark:text-text-dark">
-                  Username *
+                  Nombre de Usuario *
                 </label>
                 <Input
                   type="text"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  placeholder="username"
+                  placeholder="usuario"
                   required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-2 text-text-light dark:text-text-dark">
-                  Full Name *
+                  Nombre Completo *
                 </label>
                 <Input
                   type="text"
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  placeholder="John Doe"
+                  placeholder="Juan Pérez"
                   required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-2 text-text-light dark:text-text-dark">
-                  Email (Optional)
+                  Email (Opcional)
                 </label>
                 <Input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="user@example.com"
+                  placeholder="usuario@ejemplo.com"
                 />
                 <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
-                  If not provided, a default email will be generated
+                  Si no se proporciona, se generará un email predeterminado
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark mb-2">
-                  Role *
+                  Rol *
                 </label>
                 <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  value={formData.role_id}
+                  onChange={(e) => setFormData({ ...formData, role_id: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   required
+                  disabled={roles.length === 0}
                 >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
+                  {roles.length === 0 ? (
+                    <option value="">No hay roles disponibles</option>
+                  ) : (
+                    <>
+                      <option value="">Seleccionar rol</option>
+                      {roles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                          {role.description && ` - ${role.description}`}
+                        </option>
+                      ))}
+                    </>
+                  )}
                 </select>
+                {roles.length === 0 && (
+                  <p className="text-xs text-red-500 mt-1">
+                    No se pudieron cargar los roles. Por favor, recarga la página.
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-2 text-text-light dark:text-text-dark">
-                  Password *
+                  Contraseña *
                 </label>
                 <Input
                   type="password"
@@ -180,7 +239,7 @@ export default function NewUserPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-2 text-text-light dark:text-text-dark">
-                  Confirm Password *
+                  Confirmar Contraseña *
                 </label>
                 <Input
                   type="password"
@@ -195,10 +254,10 @@ export default function NewUserPage() {
               <div className="flex space-x-4 pt-4">
                 <Button
                   type="submit"
-                  disabled={isSubmitting || !formData.username || !formData.full_name || !formData.password}
+                  disabled={isSubmitting || !formData.username || !formData.full_name || !formData.password || !formData.role_id}
                   className="flex-1"
                 >
-                  {isSubmitting ? 'Creating...' : 'Create User'}
+                  {isSubmitting ? 'Creando...' : 'Crear Usuario'}
                 </Button>
                 <Button
                   type="button"
@@ -206,7 +265,7 @@ export default function NewUserPage() {
                   variant="secondary"
                   className="flex-1"
                 >
-                  Cancel
+                  Cancelar
                 </Button>
               </div>
             </form>
