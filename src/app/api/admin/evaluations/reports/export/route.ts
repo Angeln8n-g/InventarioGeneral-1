@@ -310,9 +310,95 @@ async function fetchSpaceReportData(startDate: string | null, endDate: string | 
   return { data: performanceData }
 }
 
+// Interface for detailed responses
+interface DetailedResponse {
+  space_name: string
+  space_location: string
+  evaluation_date: string
+  evaluator_name: string
+  category: string
+  question_text: string
+  response: string
+  observation: string
+  score_percentage: number
+}
+
+async function fetchDetailedResponses(startDate: string | null, endDate: string | null): Promise<DetailedResponse[]> {
+  // Fetch evaluation results with responses and questions
+  let query = supabase
+    .from('evaluation_results')
+    .select(`
+      id, completed_at, score_percentage,
+      evaluator:users!evaluation_results_evaluator_id_fkey(id, username, full_name),
+      scheduled_evaluation:scheduled_evaluations!inner(
+        classroom:classrooms!inner(id, name, location)
+      ),
+      responses:evaluation_responses(
+        id, response, observation,
+        question:template_questions(id, question_text, category)
+      )
+    `)
+    .eq('is_draft', false)
+    .order('completed_at', { ascending: false })
+
+  if (startDate) query = query.gte('completed_at', startDate)
+  if (endDate) query = query.lte('completed_at', endDate)
+
+  const { data: results, error } = await query
+  if (error) throw error
+
+  const detailedResponses: DetailedResponse[] = []
+
+  results?.forEach((result) => {
+    const scheduledEval = result.scheduled_evaluation as unknown as {
+      classroom: { id: number; name: string; location: string }
+    }
+    const evaluator = result.evaluator as unknown as { id: number; username: string; full_name: string | null }
+    const responses = result.responses as unknown as Array<{
+      id: number
+      response: 'yes' | 'no' | 'not_applicable'
+      observation: string | null
+      question: { id: number; question_text: string; category: string }
+    }>
+
+    if (!scheduledEval?.classroom || !responses) return
+
+    responses.forEach((resp) => {
+      if (!resp.question) return
+
+      const categoryLabels: Record<string, string> = {
+        organization: 'Organización',
+        cleanliness: 'Limpieza',
+        maintenance: 'Mantenimiento',
+      }
+
+      const responseLabels: Record<string, string> = {
+        yes: 'Sí',
+        no: 'No',
+        not_applicable: 'N/A',
+      }
+
+      detailedResponses.push({
+        space_name: scheduledEval.classroom.name,
+        space_location: scheduledEval.classroom.location,
+        evaluation_date: result.completed_at,
+        evaluator_name: evaluator?.full_name || evaluator?.username || 'Desconocido',
+        category: categoryLabels[resp.question.category] || resp.question.category,
+        question_text: resp.question.question_text,
+        response: responseLabels[resp.response] || resp.response,
+        observation: resp.observation || '',
+        score_percentage: result.score_percentage,
+      })
+    })
+  })
+
+  return detailedResponses
+}
+
 async function fetchGeneralReportData(startDate: string | null, endDate: string | null) {
   const responsibleData = await fetchResponsibleReportData(startDate, endDate)
   const spaceData = await fetchSpaceReportData(startDate, endDate)
+  const detailedResponses = await fetchDetailedResponses(startDate, endDate)
 
   // Get scheduled evaluations for status counts
   let scheduledQuery = supabase.from('scheduled_evaluations').select('id, status, scheduled_date')
@@ -507,6 +593,7 @@ async function fetchGeneralReportData(startDate: string | null, endDate: string 
     evaluatorPerformance,
     approverPerformance,
     allSpaces: spaceData.data,
+    detailedResponses,
   }
 }
 
@@ -1017,7 +1104,8 @@ function generateGeneralReportExcel(
   filters: ReportFilters,
   evaluatorPerformance?: EvaluatorPerformance[],
   approverPerformance?: ApproverPerformance[],
-  allSpaces?: SpacePerformance[]
+  allSpaces?: SpacePerformance[],
+  detailedResponses?: DetailedResponse[]
 ): Blob {
   const workbook = XLSX.utils.book_new()
   
@@ -1176,6 +1264,38 @@ function generateGeneralReportExcel(
     const allSpacesSheet = XLSX.utils.json_to_sheet(allSpacesData)
     XLSX.utils.book_append_sheet(workbook, allSpacesSheet, 'Aulas Evaluadas')
   }
+
+  // Detailed Responses sheet (Questions and Answers)
+  if (detailedResponses && detailedResponses.length > 0) {
+    const responsesData = detailedResponses.map((item) => ({
+      'Espacio': item.space_name,
+      'Ubicación': item.space_location,
+      'Fecha Evaluación': formatDate(item.evaluation_date),
+      'Evaluador': item.evaluator_name,
+      'Puntuación (%)': item.score_percentage,
+      'Categoría': item.category,
+      'Pregunta': item.question_text,
+      'Respuesta': item.response,
+      'Observación': item.observation,
+    }))
+    
+    const responsesSheet = XLSX.utils.json_to_sheet(responsesData)
+    
+    // Set column widths for better readability
+    responsesSheet['!cols'] = [
+      { wch: 20 },  // Espacio
+      { wch: 15 },  // Ubicación
+      { wch: 15 },  // Fecha
+      { wch: 20 },  // Evaluador
+      { wch: 12 },  // Puntuación
+      { wch: 15 },  // Categoría
+      { wch: 50 },  // Pregunta
+      { wch: 10 },  // Respuesta
+      { wch: 40 },  // Observación
+    ]
+    
+    XLSX.utils.book_append_sheet(workbook, responsesSheet, 'Detalle Respuestas')
+  }
   
   const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
   return new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
@@ -1318,6 +1438,7 @@ export async function POST(request: NextRequest) {
             evaluatorPerformance,
             approverPerformance,
             allSpaces,
+            detailedResponses,
           } = await fetchGeneralReportData(startDate, endDate)
           
           if (format === 'pdf') {
@@ -1340,7 +1461,8 @@ export async function POST(request: NextRequest) {
               filters,
               evaluatorPerformance,
               approverPerformance,
-              allSpaces
+              allSpaces,
+              detailedResponses
             )
             filename = `reporte-general-${timestamp}.xlsx`
           }
