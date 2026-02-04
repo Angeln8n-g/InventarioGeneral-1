@@ -73,11 +73,17 @@ export const REQUEST_STATUS_COLORS = {
 export const USER_ROLES = {
   USER: 'user',
   ADMIN: 'admin',
+  ANALYST: 'analyst',
+  SUPERVISOR: 'supervisor',
+  MANAGER: 'manager',
 } as const
 
 export const USER_ROLE_LABELS = {
-  [USER_ROLES.USER]: 'User',
-  [USER_ROLES.ADMIN]: 'Administrator',
+  [USER_ROLES.USER]: 'Usuario',
+  [USER_ROLES.ADMIN]: 'Administrador',
+  [USER_ROLES.ANALYST]: 'Analista',
+  [USER_ROLES.SUPERVISOR]: 'Supervisor',
+  [USER_ROLES.MANAGER]: 'Gerente',
 } as const
 
 // Notification types

@@ -3,6 +3,8 @@ import { useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/app/store'
 import { useAuth } from '@/hooks/useAuth'
+import { usePermissions } from '@/hooks/usePermissions'
+import { useSectionAccess } from '@/hooks/useSectionAccess'
 import {
   useGetNotificationsQuery,
   useMarkNotificationAsReadMutation,
@@ -14,6 +16,21 @@ import { useNotificationSound } from '@/hooks/useNotificationSound'
 import { NotificationsDropdown } from '@/components/dashboard/NotificationsDropdown'
 import { NotificationPreferences } from '@/components/notifications/NotificationPreferences'
 import { useViewTransition } from '@/hooks/useViewTransition'
+
+/**
+ * Get display label for a role name
+ * Supports dynamic roles from the database
+ */
+function getRoleDisplayLabel(role: string): string {
+  const roleLabels: Record<string, string> = {
+    admin: 'Administrador',
+    user: 'Usuario',
+    analyst: 'Analista',
+    supervisor: 'Supervisor',
+    manager: 'Gerente',
+  }
+  return roleLabels[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1)
+}
 
 interface HeaderProps {
   title?: string
@@ -29,7 +46,12 @@ export const Header: React.FC<HeaderProps> = ({
   const router = useRouter()
   const { user } = useSelector((state: RootState) => state.auth)
   const { logout } = useAuth()
+  const { userRole } = usePermissions()
+  const { hasAccess } = useSectionAccess()
   const { theme, toggleTheme } = useTheme()
+  
+  // Check if user has access to admin panel
+  const hasAdminAccess = hasAccess('/admin/dashboard')
   const [showMenu, setShowMenu] = useState(false)
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false)
   const [showPreferences, setShowPreferences] = useState(false)
@@ -204,7 +226,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
                       <p className="text-sm font-medium text-text-light dark:text-text-dark">{user.username}</p>
                       <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">{user.email}</p>
-                      <p className="text-xs text-claro-red capitalize font-medium">{user.role}</p>
+                      <p className="text-xs text-claro-red font-medium">{getRoleDisplayLabel(userRole || user.role)}</p>
                     </div>
 
                     <button
@@ -218,6 +240,25 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                       Profile & Settings
                     </button>
+
+                    {/* Admin Panel - only show if user has access */}
+                    {hasAdminAccess && (
+                      <button
+                        onClick={async () => {
+                          setShowMenu(false)
+                          await startTransition(() => {
+                            router.push('/admin/dashboard')
+                          }, '/admin/dashboard')
+                        }}
+                        className="flex items-center w-full text-left px-4 py-2 text-sm text-text-light dark:text-text-dark hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+                      >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1 1 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Admin Panel
+                      </button>
+                    )}
 
                     <button
                       onClick={toggleTheme}

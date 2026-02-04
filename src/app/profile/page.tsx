@@ -6,13 +6,31 @@ import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import AppLayout from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/hooks/useAuth'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { useViewTransition } from '@/hooks/useViewTransition'
 import { SwipeContainer } from '@/components/ui/SwipeContainer'
 
+/**
+ * Get display label for a role name
+ * Supports dynamic roles from the database
+ */
+function getRoleDisplayLabel(role: string): string {
+  const roleLabels: Record<string, string> = {
+    admin: 'Administrador',
+    user: 'Usuario',
+    analyst: 'Analista',
+    supervisor: 'Supervisor',
+    manager: 'Gerente',
+  }
+  // Return the label if found, otherwise capitalize the role name
+  return roleLabels[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1)
+}
+
 export default function ProfilePage() {
   const router = useRouter()
   const { user, logout } = useAuth()
+  const { userRole, isLoading: permissionsLoading } = usePermissions()
   const { language, setLanguage, t } = useLanguage()
   
   // View transitions for navigation
@@ -21,6 +39,9 @@ export default function ProfilePage() {
     direction: 'auto',
     enableHaptics: true,
   })
+
+  // Use dynamic role from permissions context, fallback to user.role
+  const displayRole = userRole || user?.role || 'user'
 
   const handleLogout = () => {
     logout()
@@ -51,8 +72,8 @@ export default function ProfilePage() {
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-text-light dark:text-text-dark">{user?.email}</h2>
-                <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark capitalize">
-                  {user?.role || 'User'}
+                <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                  {permissionsLoading ? '...' : getRoleDisplayLabel(displayRole)}
                 </p>
               </div>
             </div>

@@ -1,7 +1,6 @@
 import React from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
-import { usePermissions } from '@/hooks/usePermissions'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { useViewTransition } from '@/hooks/useViewTransition'
 import { useSectionAccess } from '@/hooks/useSectionAccess'
@@ -10,7 +9,6 @@ interface NavItem {
   name: string
   href: string
   icon: React.ReactNode
-  requireAdmin?: boolean
   /** Required permission for this nav item (for dynamic filtering) */
   requiredPermission?: string
 }
@@ -19,7 +17,6 @@ export const MobileNavigation: React.FC = () => {
   const router = useRouter()
   const pathname = usePathname()
   const { user } = useAuth()
-  const { isAdmin } = usePermissions()
   const { t } = useLanguage()
   const { hasAccess } = useSectionAccess()
   
@@ -65,7 +62,6 @@ export const MobileNavigation: React.FC = () => {
     {
       name: t('nav.admin'),
       href: '/admin/dashboard',
-      requireAdmin: true,
       requiredPermission: 'admin:view_dashboard',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,10 +78,8 @@ export const MobileNavigation: React.FC = () => {
    * @see Requirements 4.3 - Hide navigation items without access
    */
   const filteredNavItems = navItems.filter(item => {
-    // Legacy admin check for backward compatibility
-    if (item.requireAdmin && !isAdmin) return false
-    
     // Dynamic permission check using section access
+    // This handles both admin and non-admin users based on their actual permissions
     if (item.requiredPermission) {
       return hasAccess(item.href)
     }
