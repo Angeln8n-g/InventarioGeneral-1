@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Edit2, Trash2, FileText, AlertCircle, RefreshCw } from 'lucide-react'
+import { Plus, Edit2, Trash2, FileText, AlertCircle, RefreshCw, Download } from 'lucide-react'
 import type { EvaluationTemplate, SpaceType } from '@/types/evaluations'
 
 /**
@@ -65,6 +65,8 @@ export function TemplatesManager({
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   // Deleting state
   const [isDeleting, setIsDeleting] = useState(false)
+  // Downloading state
+  const [isDownloading, setIsDownloading] = useState<number | 'all' | null>(null)
 
   /**
    * Fetches templates from the API
@@ -132,6 +134,59 @@ export function TemplatesManager({
       setDeleteConfirm(null)
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  /**
+   * Handles template download (single or all)
+   */
+  const handleDownload = async (templateId?: number) => {
+    if (!token) return
+    
+    setIsDownloading(templateId || 'all')
+    
+    try {
+      const url = templateId 
+        ? `/api/admin/evaluations/templates/export?template_id=${templateId}`
+        : '/api/admin/evaluations/templates/export'
+      
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (res.ok) {
+        const blob = await res.blob()
+        const contentDisposition = res.headers.get('Content-Disposition')
+        let filename = templateId 
+          ? `plantilla-${templateId}.xlsx`
+          : 'plantillas-evaluacion.xlsx'
+        
+        // Extract filename from Content-Disposition header if available
+        if (contentDisposition) {
+          const match = contentDisposition.match(/filename="(.+)"/)
+          if (match) {
+            filename = match[1]
+          }
+        }
+        
+        // Create download link
+        const downloadUrl = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(downloadUrl)
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        setError(errorData.error?.message || 'Error al descargar la plantilla')
+      }
+    } catch (err) {
+      console.error('Error downloading template:', err)
+      setError('Error de conexión al descargar la plantilla')
+    } finally {
+      setIsDownloading(null)
     }
   }
 
@@ -295,6 +350,19 @@ export function TemplatesManager({
               <td className="py-3 px-4">
                 <div className="flex items-center justify-end gap-2">
                   <button
+                    onClick={() => handleDownload(template.id)}
+                    disabled={isDownloading === template.id}
+                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-green-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                    title="Descargar plantilla"
+                    aria-label={`Descargar plantilla ${template.name}`}
+                  >
+                    {isDownloading === template.id ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
+                  </button>
+                  <button
                     onClick={() => onEditTemplate(template)}
                     className="p-2 text-gray-600 dark:text-gray-400 hover:text-claro-red hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                     title="Editar plantilla"
@@ -334,13 +402,30 @@ export function TemplatesManager({
             </span>
           )}
         </div>
-        <button
-          onClick={onCreateTemplate}
-          className="flex items-center gap-2 px-4 py-2 bg-claro-red text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-        >
-          <Plus className="w-4 h-4" />
-          Nueva Plantilla
-        </button>
+        <div className="flex items-center gap-2">
+          {templates.length > 0 && (
+            <button
+              onClick={() => handleDownload()}
+              disabled={isDownloading === 'all'}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50"
+              title="Descargar todas las plantillas"
+            >
+              {isDownloading === 'all' ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              Exportar Todas
+            </button>
+          )}
+          <button
+            onClick={onCreateTemplate}
+            className="flex items-center gap-2 px-4 py-2 bg-claro-red text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Nueva Plantilla
+          </button>
+        </div>
       </div>
 
       {/* Content */}
