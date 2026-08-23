@@ -5,9 +5,9 @@
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
-    "dev": "next dev --turbopack",
-    "dev:clean": "npm run clean && next dev --turbopack",
-    "build": "next build --turbopack",
+    "dev": "next dev",
+    "dev:clean": "npm run clean && next dev",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "clean": "rimraf .next .turbo node_modules/.cache",
@@ -15,6 +15,7 @@
     "import:tools": "node scripts/import-tools.js",
     "cleanup:notifications": "ts-node scripts/cleanup-test-notifications.ts",
     "type-check": "tsc --noEmit",
+    "db:types": "supabase gen types typescript --local > src/types/database.generated.ts",
     "analyze": "node scripts/analyze-bundle.js",
     "build:analyze": "npm run build && npm run analyze",
     "verify-env": "node scripts/verify-env.js",
@@ -48,7 +49,8 @@
     "sonner": "^2.0.7",
     "uuid": "^11.0.5",
     "xlsx": "^0.18.5",
-    "yup": "^1.7.1"
+    "yup": "^1.7.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

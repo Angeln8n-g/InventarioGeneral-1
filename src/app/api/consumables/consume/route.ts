@@ -1,106 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { auditLogOperations } from '@/lib/supabase-client'
 import { withAuth } from '@/lib/auth-middleware'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
+import { ConsumeConsumableSchema, validateRequestBody } from '@/lib/validation/schemas'
 
 export async function POST(request: NextRequest) {
   try {
     return await withAuth(request, async (authContext) => {
-      const body = await request.json()
-      const { qr_code, quantity, notes, start_marker, end_marker } = body
-
-      if (!qr_code || typeof qr_code !== 'string') {
-        return NextResponse.json(
-          {
-            error: {
-              code: ERROR_CODES.VALIDATION_ERROR,
-              message: 'QR code is required',
-              timestamp: new Date().toISOString(),
-            },
-          },
-          { status: 400 }
-        )
+      // 1. Zod Schema Validation
+      const validation = await validateRequestBody(ConsumeConsumableSchema, request)
+      if (!validation.success) {
+        return validation.response
       }
 
-      // Validate markers if provided
-      if (start_marker !== undefined || end_marker !== undefined) {
-        // Both markers must be provided together
-        if (start_marker === undefined || end_marker === undefined) {
-          return NextResponse.json(
-            {
-              error: {
-                code: ERROR_CODES.VALIDATION_ERROR,
-                message: 'Both start_marker and end_marker must be provided together',
-                timestamp: new Date().toISOString(),
-              },
-            },
-            { status: 400 }
-          )
-        }
+      const { qr_code, quantity, notes, start_marker, end_marker } = validation.data
 
-        // Validate marker types
-        if (typeof start_marker !== 'number' || typeof end_marker !== 'number') {
-          return NextResponse.json(
-            {
-              error: {
-                code: ERROR_CODES.VALIDATION_ERROR,
-                message: 'Markers must be numbers',
-                timestamp: new Date().toISOString(),
-              },
-            },
-            { status: 400 }
-          )
-        }
-
-        // Validate marker values
-        if (start_marker < 0 || end_marker < 0) {
-          return NextResponse.json(
-            {
-              error: {
-                code: ERROR_CODES.VALIDATION_ERROR,
-                message: 'Markers must be positive numbers',
-                timestamp: new Date().toISOString(),
-              },
-            },
-            { status: 400 }
-          )
-        }
-
-        if (end_marker <= start_marker) {
-          return NextResponse.json(
-            {
-              error: {
-                code: ERROR_CODES.VALIDATION_ERROR,
-                message: 'End marker must be greater than start marker',
-                timestamp: new Date().toISOString(),
-              },
-            },
-            { status: 400 }
-          )
-        }
-      }
-
-      // Validate quantity (required if no markers provided)
-      if (start_marker === undefined && (!quantity || typeof quantity !== 'number' || quantity <= 0)) {
-        return NextResponse.json(
-          {
-            error: {
-              code: ERROR_CODES.VALIDATION_ERROR,
-              message: 'Valid quantity is required when markers are not provided',
-              timestamp: new Date().toISOString(),
-            },
-          },
-          { status: 400 }
-        )
-      }
-
-      // Calculate quantity from markers if provided
-      const actualQuantity = start_marker !== undefined && end_marker !== undefined
+      // Calculate quantity if marker range is provided
+      const actualQuantity = (start_marker !== undefined && end_marker !== undefined)
         ? Math.round((end_marker - start_marker) * 100) / 100
-        : quantity
+        : (quantity || 0)
 
-      // Get consumable stock by QR code
+      // 2. Fetch stock ID by QR code
       const { data: stock, error: stockError } = await supabase
         .from('consumable_stock')
         .select(`
@@ -123,7 +43,56 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Check if enough stock is available
+      // 3. Try Atomic Execution via PostgreSQL RPC
+      try {
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('consume_consumable_atomic', {
+          p_stock_id: stock.id,
+          p_user_id: authContext.user.id,
+          p_quantity: actualQuantity,
+          p_notes: notes || `Consumed via QR scan`,
+          p_start_marker: start_marker ?? null,
+          p_end_marker: end_marker ?? null,
+        })
+
+        if (!rpcError && rpcResult) {
+          if (!rpcResult.success) {
+            return NextResponse.json(
+              {
+                error: {
+                  code: rpcResult.error_code || ERROR_CODES.VALIDATION_ERROR,
+                  message: rpcResult.message || 'Consumption failed',
+                  details: rpcResult,
+                  timestamp: new Date().toISOString(),
+                },
+              },
+              { status: 400 }
+            )
+          }
+
+          const responseData: Record<string, unknown> = {
+            item_type: stock.item_type,
+            previous_quantity: rpcResult.previous_quantity,
+            consumed_quantity: rpcResult.consumed_quantity,
+            remaining_quantity: rpcResult.remaining_quantity,
+            unit_of_measure: rpcResult.unit_of_measure,
+            is_low_stock: rpcResult.is_low_stock,
+          }
+
+          if (start_marker !== undefined && end_marker !== undefined) {
+            responseData.start_marker = start_marker
+            responseData.end_marker = end_marker
+          }
+
+          return NextResponse.json({
+            data: responseData,
+            message: `Successfully consumed ${actualQuantity} ${stock.unit_of_measure || 'units'} of ${stock.item_type?.name || 'item'}`,
+          })
+        }
+      } catch (rpcExecutionErr) {
+        console.warn('RPC execution unavailable, falling back to client-side transaction logic:', rpcExecutionErr)
+      }
+
+      // 4. Graceful Fallback (if RPC is not yet executed in database)
       if (stock.current_quantity < actualQuantity) {
         return NextResponse.json(
           {
@@ -137,13 +106,13 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Update stock quantity
       const newQuantity = stock.current_quantity - actualQuantity
       const { error: updateError } = await supabase
         .from('consumable_stock')
         .update({ 
           current_quantity: newQuantity,
           updated_at: new Date().toISOString(),
+          version: (stock.version || 1) + 1,
         })
         .eq('id', stock.id)
 
@@ -161,95 +130,18 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Create stock movement record
-      try {
-        const movementData: Record<string, unknown> = {
-          consumable_stock_id: stock.id,
-          movement_type: 'consumption',
-          quantity: -actualQuantity, // Negative for consumption
-          user_id: authContext.user.id,
-          notes: notes || `Consumed via QR scan`,
-        }
-
-        // Add markers if provided
-        if (start_marker !== undefined && end_marker !== undefined) {
-          movementData.start_marker = start_marker
-          movementData.end_marker = end_marker
-        }
-
-        const { error: insertError } = await supabase
-          .from('stock_movements')
-          .insert(movementData)
-
-        // If marker columns don't exist, retry without them
-        if (insertError && insertError.code === '42703' && start_marker !== undefined) {
-          const basicMovementData = {
-            consumable_stock_id: stock.id,
-            movement_type: 'consumption',
-            quantity: -actualQuantity,
-            user_id: authContext.user.id,
-            notes: notes || `Consumed via QR scan (markers: ${start_marker}-${end_marker})`,
-          }
-          await supabase.from('stock_movements').insert(basicMovementData)
-        } else if (insertError) {
-          throw insertError
-        }
-      } catch (movementError) {
-        console.error('Failed to create stock movement:', movementError)
+      const movementData: Record<string, unknown> = {
+        consumable_stock_id: stock.id,
+        movement_type: 'consumption',
+        quantity: -actualQuantity,
+        user_id: authContext.user.id,
+        notes: notes || `Consumed via QR scan`,
       }
-
-      // Create audit log
-      try {
-        const auditNewValues: Record<string, unknown> = {
-          current_quantity: newQuantity,
-          quantity_consumed: actualQuantity,
-        }
-
-        // Add markers to audit log if provided
-        if (start_marker !== undefined && end_marker !== undefined) {
-          auditNewValues.start_marker = start_marker
-          auditNewValues.end_marker = end_marker
-        }
-
-        await auditLogOperations.create({
-          user_id: authContext.user.id,
-          action: 'consumable_consume',
-          entity_type: 'consumable_stock',
-          entity_id: stock.id,
-          old_values: { current_quantity: stock.current_quantity },
-          new_values: auditNewValues,
-          ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
-          user_agent: request.headers.get('user-agent') || 'unknown',
-        })
-      } catch (auditError) {
-        console.error('Failed to create audit log:', auditError)
+      if (start_marker !== undefined && end_marker !== undefined) {
+        movementData.start_marker = start_marker
+        movementData.end_marker = end_marker
       }
-
-      // Check if stock is low and create notification
-      if (newQuantity <= stock.minimum_threshold && newQuantity > 0) {
-        try {
-          // Get all admin users
-          const { data: admins } = await supabase
-            .from('users')
-            .select('id')
-            .eq('role', 'admin')
-
-          if (admins && admins.length > 0) {
-            const notifications = admins.map(admin => ({
-              user_id: admin.id,
-              type: 'low_stock',
-              title: 'Low Stock Alert',
-              message: `${stock.item_type.name} is running low. Current stock: ${newQuantity} ${stock.unit_of_measure || 'units'}`,
-            }))
-
-            await supabase
-              .from('notifications')
-              .insert(notifications)
-          }
-        } catch (notificationError) {
-          console.error('Failed to create notifications:', notificationError)
-        }
-      }
+      await supabase.from('stock_movements').insert(movementData)
 
       const responseData: Record<string, unknown> = {
         item_type: stock.item_type,
@@ -260,7 +152,6 @@ export async function POST(request: NextRequest) {
         is_low_stock: newQuantity <= stock.minimum_threshold,
       }
 
-      // Add markers to response if provided
       if (start_marker !== undefined && end_marker !== undefined) {
         responseData.start_marker = start_marker
         responseData.end_marker = end_marker
@@ -268,7 +159,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         data: responseData,
-        message: `Successfully consumed ${actualQuantity} ${stock.unit_of_measure || 'units'} of ${stock.item_type.name}`,
+        message: `Successfully consumed ${actualQuantity} ${stock.unit_of_measure || 'units'} of ${stock.item_type?.name || 'item'}`,
       })
     })
   } catch (error: unknown) {

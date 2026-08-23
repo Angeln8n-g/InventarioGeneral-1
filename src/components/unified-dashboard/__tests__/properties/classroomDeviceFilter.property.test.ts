@@ -205,27 +205,27 @@ describe('Classroom Device History Filter Properties', () => {
             fc.array(
               movementArb(1, deviceIds, classrooms),
               { minLength: 1, maxLength: 10 }
-            ).map((arr, idx) => arr.map((m, i) => ({ ...m, id: i + 1 })))
+            ).map((arr) => arr.map((m: DeviceMovement, i: number) => ({ ...m, id: i + 1 })))
           )
         }),
-        ([classrooms, devices, targetClassroomId, movements]) => {
+        ([classrooms, devices, targetClassroomId, movements]: [Classroom[], Device[], number, DeviceMovement[]]) => {
           const filteredDevices = filterDevicesByClassroom(devices, movements, targetClassroomId)
           
           // Get device IDs that appear in movements involving the target classroom
           const historicalDeviceIds = new Set(
             movements
-              .filter(m => 
+              .filter((m: DeviceMovement) => 
                 m.toClassroom.id === targetClassroomId || 
                 m.fromClassroom?.id === targetClassroomId
               )
-              .map(m => m.deviceId)
+              .map((m: DeviceMovement) => m.deviceId)
           )
           
           // All historical devices should be in the filtered result
           for (const deviceId of historicalDeviceIds) {
-            const deviceExists = devices.some(d => d.id === deviceId)
+            const deviceExists = devices.some((d: Device) => d.id === deviceId)
             if (deviceExists) {
-              expect(filteredDevices.some(d => d.id === deviceId)).toBe(true)
+              expect(filteredDevices.some((d: Device) => d.id === deviceId)).toBe(true)
             }
           }
         }
@@ -291,7 +291,7 @@ describe('Classroom Device History Filter Properties', () => {
   it('should not include devices with no connection to the filtered classroom', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 3, max: 5 }).chain(numClassrooms => {
+        fc.integer({ min: 3, max: 5 }).chain((numClassrooms: number) => {
           const classroomIds = Array.from({ length: numClassrooms }, (_, i) => i + 1)
           
           return fc.tuple(
@@ -315,12 +315,12 @@ describe('Classroom Device History Filter Properties', () => {
             }),
             fc.constantFrom(...classroomIds)
           )
-        }).chain(([classrooms, [devices, deviceIds], targetClassroomId]) => {
+        }).chain(([classrooms, [devices, deviceIds], targetClassroomId]: [Classroom[], [Device[], number[]], number]) => {
           // Generate movements that DON'T involve the target classroom
           const otherClassrooms = classrooms.filter(c => c.id !== targetClassroomId)
           
           if (otherClassrooms.length === 0) {
-            return fc.constant([classrooms, devices, targetClassroomId, []] as const)
+            return fc.constant<[Classroom[], Device[], number, DeviceMovement[]]>([classrooms, devices, targetClassroomId, []])
           }
           
           return fc.tuple(
@@ -330,19 +330,19 @@ describe('Classroom Device History Filter Properties', () => {
             fc.array(
               movementArb(1, deviceIds, otherClassrooms),
               { minLength: 0, maxLength: 5 }
-            ).map((arr) => arr.map((m, i) => ({ ...m, id: i + 1 })))
-          )
+            ).map((arr) => arr.map((m: DeviceMovement, i: number) => ({ ...m, id: i + 1 })))
+          ) as fc.Arbitrary<[Classroom[], Device[], number, DeviceMovement[]]>
         }),
-        ([classrooms, devices, targetClassroomId, movements]) => {
+        ([classrooms, devices, targetClassroomId, movements]: [Classroom[], Device[], number, DeviceMovement[]]) => {
           const filteredDevices = filterDevicesByClassroom(devices, movements, targetClassroomId)
           
           // Find devices that have NO connection to target classroom
-          const devicesWithNoConnection = devices.filter(d => {
+          const devicesWithNoConnection = devices.filter((d: Device) => {
             // Not currently assigned
             if (d.currentClassroomId === targetClassroomId) return false
             
             // Not in any movement involving target classroom
-            const hasMovement = movements.some(m => 
+            const hasMovement = movements.some((m: DeviceMovement) => 
               m.deviceId === d.id && 
               (m.toClassroom.id === targetClassroomId || m.fromClassroom?.id === targetClassroomId)
             )
@@ -352,7 +352,7 @@ describe('Classroom Device History Filter Properties', () => {
           
           // These devices should NOT be in the filtered result
           for (const device of devicesWithNoConnection) {
-            expect(filteredDevices.some(d => d.id === device.id)).toBe(false)
+            expect(filteredDevices.some((d: Device) => d.id === device.id)).toBe(false)
           }
         }
       ),

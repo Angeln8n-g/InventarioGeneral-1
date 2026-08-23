@@ -297,13 +297,13 @@ const mixedPerformanceArrayArb = fc.tuple(
  * Generator for scores that result in exactly the threshold (70%)
  * Edge case: exactly 70% should NOT be a low performer
  */
-const exactThresholdScoresArb = fc.constant([70])
+const exactThresholdScoresArb = fc.constant<number[]>([70])
 
 /**
  * Generator for scores just below threshold (69.99%)
  * Edge case: just below 70% should be a low performer
  */
-const justBelowThresholdScoresArb = fc.constant([69.99])
+const justBelowThresholdScoresArb = fc.constant<number[]>([69.99])
 
 // ============================================================================
 // Property Tests

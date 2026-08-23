@@ -156,14 +156,15 @@ export async function GET(request: NextRequest) {
       })
     })
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    const errorDetails = error instanceof Error ? error.stack : String(error)
+    const errObj = error as { message?: string; details?: string; code?: string; stack?: string; cause?: unknown }
+    const errorMessage = errObj?.message || (error instanceof Error ? error.message : 'Unknown error')
+    const errorDetails = errObj?.details || (error instanceof Error ? error.stack : (typeof error === 'object' ? JSON.stringify(error) : String(error)))
     
     console.error('Dashboard stats error:', {
       message: errorMessage,
       details: errorDetails,
-      hint: error instanceof Error && 'cause' in error ? String(error.cause) : '',
-      code: error instanceof Error && 'code' in error ? String((error as { code?: string }).code) : '',
+      hint: errObj?.cause ? String(errObj.cause) : '',
+      code: errObj?.code ? String(errObj.code) : '',
     })
 
     if (error instanceof Error && error.name === 'AuthenticationError') {

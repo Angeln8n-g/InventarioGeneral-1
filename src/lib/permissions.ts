@@ -268,6 +268,7 @@ export function hasPermission(user: PermissionUser, permission: Permission): boo
 
 export function hasAnyPermission(user: PermissionUser, permissions: Permission[]): boolean {
   if (!user) return false
+  if (permissions.length === 0) return false
   
   // Admin users always have all permissions
   if (user.role === 'admin') return true

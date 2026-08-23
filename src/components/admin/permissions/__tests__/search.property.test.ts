@@ -287,8 +287,8 @@ describe('Feature: dynamic-permissions-system', () => {
                 fullName: fc.constant(null),
                 roleId: fc.nat({ max: 100 }),
                 roleName: fc.constant('user'),
-                effectivePermissions: fc.constant([]),
-                overrides: fc.constant({ granted: [], revoked: [] })
+                effectivePermissions: fc.constant<string[]>([]),
+                overrides: fc.constant<{ granted: string[]; revoked: string[] }>({ granted: [], revoked: [] })
               }),
               { minLength: 1, maxLength: 20 }
             ),

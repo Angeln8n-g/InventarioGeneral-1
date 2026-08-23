@@ -3,6 +3,7 @@
  * Usa el formato de texto simple compatible con Power Automate
  */
 
+// @ts-ignore
 import * as dotenv from 'dotenv'
 
 dotenv.config({ path: '.env.local' })

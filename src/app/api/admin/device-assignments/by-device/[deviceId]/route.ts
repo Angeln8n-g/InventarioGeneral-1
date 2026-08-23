@@ -7,10 +7,11 @@ import { assignmentOperations } from '@/lib/supabase-client'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { deviceId: string } }
+  { params }: { params: Promise<{ deviceId: string }> }
 ) {
   try {
-    const deviceId = parseInt(params.deviceId)
+    const { deviceId: deviceIdParam } = await params
+    const deviceId = parseInt(deviceIdParam)
 
     if (isNaN(deviceId)) {
       return NextResponse.json(

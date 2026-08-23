@@ -101,7 +101,7 @@ const defaultContextValue: PermissionsContextValue = {
   isAdmin: false,
 }
 
-const PermissionsContext = createContext<PermissionsContextValue>(defaultContextValue)
+const PermissionsContext = createContext<PermissionsContextValue | undefined>(undefined)
 
 /**
  * Get the cache key for a specific user

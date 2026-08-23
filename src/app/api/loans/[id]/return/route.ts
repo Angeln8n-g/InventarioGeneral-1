@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { loanOperations, toolInstanceOperations, auditLogOperations, notificationOperations } from '@/lib/supabase-client'
+import { loanOperations, toolInstanceOperations, auditLogOperations, notificationOperations, supabase } from '@/lib/supabase-client'
 import { withAuth } from '@/lib/auth-middleware'
 import { canReturnTool } from '@/lib/permissions'
 import { ERROR_CODES, ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/utils/constants'
@@ -26,7 +26,6 @@ export async function PUT(
                 )
             }
 
-            // Get loan information
             const loan = await loanOperations.getById(loanId)
 
             if (!loan) {
@@ -42,7 +41,6 @@ export async function PUT(
                 )
             }
 
-            // Check if user can return this tool
             if (!canReturnTool(authContext.user, loan.user_id)) {
                 return NextResponse.json(
                     {
@@ -56,7 +54,6 @@ export async function PUT(
                 )
             }
 
-            // Check if loan is already returned
             if (loan.status === 'returned') {
                 return NextResponse.json(
                     {
@@ -73,7 +70,6 @@ export async function PUT(
                 )
             }
 
-            // Check if loan is lost
             if (loan.status === 'lost') {
                 return NextResponse.json(
                     {
@@ -87,78 +83,66 @@ export async function PUT(
                 )
             }
 
-            const body = await request.json()
-            const returnNotes = body.notes || ''
-
+            let body: any = {}
             try {
-                // Start transaction-like operations
-                // 1. Update loan status to returned
-                const updatedLoan = await loanOperations.returnTool(loanId)
+                body = await request.json()
+            } catch {
+                body = {}
+            }
+            const returnNotes = body.notes || ''
+            const toolStatus = body.tool_status || 'available'
 
-                // 2. Update tool status back to available
-                await toolInstanceOperations.updateStatus(
-                    loan.tool_instance_id,
-                    'available',
-                    `Returned by ${authContext.user.username} on ${new Date().toISOString()}${returnNotes ? `. Notes: ${returnNotes}` : ''}`
-                )
+            // Try Atomic RPC execution
+            try {
+                const { data: rpcResult, error: rpcError } = await supabase.rpc('return_tool_atomic', {
+                    p_loan_id: loanId,
+                    p_condition_notes: returnNotes || null,
+                    p_tool_status: toolStatus,
+                })
 
-                // 3. Create audit log
-                try {
-                    await auditLogOperations.create({
-                        user_id: authContext.user.id,
-                        action: 'loan_return',
-                        entity_type: 'loan',
-                        entity_id: loanId,
-                        old_values: {
-                            status: loan.status,
-                            return_date: loan.return_date,
-                        },
-                        new_values: {
-                            status: 'returned',
-                            return_date: new Date().toISOString(),
-                            notes: returnNotes,
-                        },
-                        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
-                        user_agent: request.headers.get('user-agent') || 'unknown',
-                    })
-                } catch (auditError) {
-                    console.error('Failed to create audit log:', auditError)
-                    // Don't fail the return if audit logging fails
-                }
-
-                // 4. Create notification for return confirmation
-                try {
+                if (!rpcError && rpcResult && rpcResult.success) {
                     const isOverdue = new Date(loan.due_date) < new Date()
-                    await notificationOperations.create({
+                    notificationOperations.create({
                         user_id: authContext.user.id,
                         type: 'return_confirmation',
                         title: 'Tool Returned Successfully',
                         message: `You have successfully returned ${loan.tool_instance?.item_type?.name || 'the tool'}${isOverdue ? ' (was overdue)' : ''}.`,
-                    })
-                } catch (notificationError) {
-                    console.error('Failed to create notification:', notificationError)
-                    // Don't fail the return if notification fails
-                }
+                    }).catch(err => console.error('Notification error:', err))
 
-                return NextResponse.json({
-                    data: updatedLoan,
-                    message: SUCCESS_MESSAGES.TOOL_RETURNED,
-                })
-
-            } catch (error: unknown) {
-                console.error('Loan return transaction error:', error)
-
-                return NextResponse.json(
-                    {
-                        error: {
-                            code: ERROR_CODES.DATABASE_ERROR,
-                            message: 'Failed to return tool. Please try again.',
-                            timestamp: new Date().toISOString(),
+                    return NextResponse.json({
+                        data: {
+                            ...loan,
+                            status: 'returned',
+                            return_date: rpcResult.return_date,
                         },
-                    },
-                    { status: 500 }
-                )
+                        message: SUCCESS_MESSAGES.TOOL_RETURNED,
+                    })
+                }
+            } catch (rpcErr) {
+                console.warn('return_tool_atomic RPC unavailable, falling back to application transaction logic:', rpcErr)
             }
+
+            // Fallback
+            const updatedLoan = await loanOperations.returnTool(loanId)
+
+            await toolInstanceOperations.updateStatus(
+                loan.tool_instance_id,
+                toolStatus,
+                `Returned by ${authContext.user.username} on ${new Date().toISOString()}${returnNotes ? `. Notes: ${returnNotes}` : ''}`
+            )
+
+            const isOverdue = new Date(loan.due_date) < new Date()
+            notificationOperations.create({
+                user_id: authContext.user.id,
+                type: 'return_confirmation',
+                title: 'Tool Returned Successfully',
+                message: `You have successfully returned ${loan.tool_instance?.item_type?.name || 'the tool'}${isOverdue ? ' (was overdue)' : ''}.`,
+            }).catch(err => console.error('Notification error:', err))
+
+            return NextResponse.json({
+                data: updatedLoan,
+                message: SUCCESS_MESSAGES.TOOL_RETURNED,
+            })
         })
     } catch (error: unknown) {
         console.error('Loan return error:', error)

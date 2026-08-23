@@ -1428,6 +1428,11 @@ describe('Feature: dynamic-permissions-system - Property-Based Tests for Audit',
     }
 
 
+    const validDateArb = fc.integer({ 
+      min: new Date('2020-01-01').getTime(), 
+      max: new Date('2025-12-31').getTime() 
+    }).map(ts => new Date(ts));
+
     it('should return audit entries ordered by date descending (most recent first)', () => {
       fc.assert(
         fc.property(
@@ -1439,8 +1444,8 @@ describe('Feature: dynamic-permissions-system - Property-Based Tests for Audit',
               targetId: positiveIntArb,
               targetName: validRoleNameArb,
               changes: auditChangesArb,
-              // Generate dates within a reasonable range
-              createdAt: fc.date({ min: new Date('2020-01-01'), max: new Date('2025-12-31') }),
+              // Generate valid dates within a reasonable range
+              createdAt: validDateArb,
             }),
             { minLength: 2, maxLength: 50 }
           ),
@@ -1486,7 +1491,7 @@ describe('Feature: dynamic-permissions-system - Property-Based Tests for Audit',
               targetId: fc.integer({ min: 1, max: 5 }), // Limited range to ensure some matches
               targetName: validRoleNameArb,
               changes: auditChangesArb,
-              createdAt: fc.date({ min: new Date('2020-01-01'), max: new Date('2025-12-31') }),
+              createdAt: validDateArb,
             }),
             { minLength: 5, maxLength: 30 }
           ),
@@ -1528,7 +1533,7 @@ describe('Feature: dynamic-permissions-system - Property-Based Tests for Audit',
       fc.assert(
         fc.property(
           fc.array(
-            fc.date({ min: new Date('2020-01-01'), max: new Date('2025-12-31') }),
+            validDateArb,
             { minLength: 3, maxLength: 20 }
           ),
           (dates) => {

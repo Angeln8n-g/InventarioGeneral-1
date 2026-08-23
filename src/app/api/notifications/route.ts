@@ -44,11 +44,12 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: unknown) {
     // Enhanced error logging
+    const errObj = error as { message?: string; details?: string; code?: string; stack?: string }
     console.error('Notifications fetch error:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      details: error instanceof Error ? error.stack : String(error),
+      message: errObj?.message || (error instanceof Error ? error.message : 'Unknown error'),
+      details: errObj?.details || (error instanceof Error ? error.stack : (typeof error === 'object' ? JSON.stringify(error) : String(error))),
       hint: 'Check database connection and Supabase configuration',
-      code: error instanceof Error && 'code' in error ? (error as any).code : '',
+      code: errObj?.code || '',
     })
 
     if (error instanceof Error && error.name === 'AuthenticationError') {

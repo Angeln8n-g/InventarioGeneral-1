@@ -1,0 +1,4 @@
+-- Rollback Migration 034
+DROP FUNCTION IF EXISTS public.consume_consumable_atomic(INTEGER, INTEGER, NUMERIC, TEXT, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS public.create_batch_loans_atomic(INTEGER, INTEGER[], TIMESTAMP WITH TIME ZONE, TEXT, INTEGER);
+DROP FUNCTION IF EXISTS public.return_tool_atomic(INTEGER, TEXT, VARCHAR);

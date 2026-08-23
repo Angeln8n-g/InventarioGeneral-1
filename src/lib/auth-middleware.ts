@@ -69,6 +69,9 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
     }
 
   } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      throw error
+    }
     if (error instanceof Error) {
       if (error.name === 'JsonWebTokenError') {
         throw new AuthenticationError('Invalid token')
@@ -76,6 +79,9 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
       if (error.name === 'TokenExpiredError') {
         throw new AuthenticationError('Token expired')
       }
+    }
+    if (typeof error === 'object' && error !== null && (error as { code?: string }).code === 'PGRST116') {
+      throw new AuthenticationError('User not found')
     }
     throw error
   }

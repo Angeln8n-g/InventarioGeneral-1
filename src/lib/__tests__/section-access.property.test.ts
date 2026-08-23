@@ -24,13 +24,13 @@ import {
   SECTION_CONFIG,
   NavigationItem,
 } from '@/lib/section-access'
-import { PERMISSIONS, ROLE_PERMISSIONS } from '@/lib/permissions'
+import { PERMISSIONS, ROLE_PERMISSIONS, type Permission } from '@/lib/permissions'
 import { calculateEffectivePermissions } from '@/services/permissions.service'
 
 /**
  * Get all permission values from the PERMISSIONS constant
  */
-const ALL_PERMISSIONS = Object.values(PERMISSIONS)
+const ALL_PERMISSIONS: Permission[] = Object.values(PERMISSIONS)
 
 /**
  * Get all section paths from the SECTION_CONFIG
@@ -40,7 +40,7 @@ const ALL_SECTION_PATHS = Object.keys(SECTION_CONFIG)
 /**
  * Get all section permissions from the SECTION_CONFIG
  */
-const ALL_SECTION_PERMISSIONS = Object.values(SECTION_CONFIG).map(s => s.requiredPermission)
+const ALL_SECTION_PERMISSIONS = Object.values(SECTION_CONFIG).map(s => s.requiredPermission) as Permission[]
 
 /**
  * Valid roles in the system
@@ -72,9 +72,13 @@ const navigationItemArb = fc.record({
 })
 
 /**
- * Generator for arrays of navigation items
+ * Generator for arrays of navigation items (unique by href)
  */
-const navigationItemsArb = fc.array(navigationItemArb, { minLength: 0, maxLength: 10 })
+const navigationItemsArb = fc.uniqueArray(navigationItemArb, { 
+  selector: item => item.href,
+  minLength: 0, 
+  maxLength: 10 
+})
 
 describe('Feature: dynamic-permissions-system', () => {
   /**
@@ -99,7 +103,7 @@ describe('Feature: dynamic-permissions-system', () => {
             
             // If section requires a permission
             if (requiredPermission) {
-              const hasRequiredPermission = userPermissions.includes(requiredPermission)
+              const hasRequiredPermission = userPermissions.includes(requiredPermission as Permission)
               const hasAccess = hasAccessToSection(sectionPath, userPermissions)
               
               // Access should match whether user has the required permission
@@ -233,7 +237,7 @@ describe('Feature: dynamic-permissions-system', () => {
       fc.assert(
         fc.property(
           sectionPathArb,
-          fc.string({ minLength: 1, maxLength: 20 }).filter(s => !s.includes('/') && s.match(/^[a-z0-9-]+$/)),
+          fc.string({ minLength: 1, maxLength: 20 }).filter(s => !s.includes('/') && /^[a-z0-9-]+$/.test(s)),
           permissionArrayArb,
           (basePath, nestedSegment, userPermissions) => {
             const nestedPath = `${basePath}/${nestedSegment}`
@@ -327,7 +331,7 @@ describe('Feature: dynamic-permissions-system', () => {
             // Every item in filtered list should be accessible
             for (const item of filteredItems) {
               if (item.requiredPermission) {
-                expect(userPermissions.includes(item.requiredPermission)).toBe(true)
+                expect(userPermissions.includes(item.requiredPermission as Permission)).toBe(true)
               }
             }
           }
@@ -350,7 +354,7 @@ describe('Feature: dynamic-permissions-system', () => {
             
             // Items that require permissions the user doesn't have should be excluded
             for (const item of navItems) {
-              if (item.requiredPermission && !userPermissions.includes(item.requiredPermission)) {
+              if (item.requiredPermission && !userPermissions.includes(item.requiredPermission as Permission)) {
                 expect(filteredHrefs.has(item.href)).toBe(false)
               }
             }
@@ -433,7 +437,7 @@ describe('Feature: dynamic-permissions-system', () => {
               
               // If item has a required permission, filtering should match access check
               if (item.requiredPermission) {
-                const hasPermission = userPermissions.includes(item.requiredPermission)
+                const hasPermission = userPermissions.includes(item.requiredPermission as Permission)
                 expect(isInFiltered).toBe(hasPermission)
               }
             }

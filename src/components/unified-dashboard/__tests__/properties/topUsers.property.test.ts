@@ -203,17 +203,17 @@ describe('Top Users Properties', () => {
   it('all filter should return all users', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 0, max: 20 }).chain((numUsers) => {
-          if (numUsers === 0) return fc.constant([])
+        fc.integer({ min: 0, max: 20 }).chain((numUsers: number) => {
+          if (numUsers === 0) return fc.constant<TopUser[]>([])
           const ids = Array.from({ length: numUsers }, (_, i) => i + 1)
           return fc
             .array(
               fc.integer({ min: 0, max: numUsers - 1 }).chain((idx) => topUserArb(ids[idx])),
               { minLength: numUsers, maxLength: numUsers }
             )
-            .map((arr) => ids.map((id, i) => ({ ...arr[i], userId: id })))
+            .map((arr) => ids.map((id, i) => ({ ...arr[i], userId: id }))) as fc.Arbitrary<TopUser[]>
         }),
-        (users) => {
+        (users: TopUser[]) => {
           const filtered = filterUsersByActivityType(users, 'all')
           expect(filtered.length).toBe(users.length)
         }
@@ -232,18 +232,18 @@ describe('Top Users Properties', () => {
     fc.assert(
       fc.property(
         fc.tuple(
-          fc.integer({ min: 1, max: 15 }).chain((numUsers) => {
+          fc.integer({ min: 1, max: 15 }).chain((numUsers: number) => {
             const ids = Array.from({ length: numUsers }, (_, i) => i + 1)
             return fc
               .array(
                 fc.integer({ min: 0, max: numUsers - 1 }).chain((idx) => topUserArb(ids[idx])),
                 { minLength: numUsers, maxLength: numUsers }
               )
-              .map((arr) => ids.map((id, i) => ({ ...arr[i], userId: id })))
+              .map((arr) => ids.map((id, i) => ({ ...arr[i], userId: id }))) as fc.Arbitrary<TopUser[]>
           }),
           fc.constantFrom<ActivityFilter>('all', 'loans', 'consumables')
         ),
-        ([users, filter]) => {
+        ([users, filter]: [TopUser[], ActivityFilter]) => {
           const filtered = filterUsersByActivityType(users, filter)
 
           // Every filtered user should exist in original array

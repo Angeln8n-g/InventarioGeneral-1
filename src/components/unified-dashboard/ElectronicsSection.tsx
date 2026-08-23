@@ -152,7 +152,7 @@ export function ElectronicsSection({
       header: 'Aula Actual', 
       sortable: true, 
       searchable: true,
-      render: (value) => value || 'Sin asignar'
+      render: (value) => (value ? String(value) : 'Sin asignar')
     },
   ], [])
 

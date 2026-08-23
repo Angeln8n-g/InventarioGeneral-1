@@ -139,17 +139,17 @@ describe('Classroom Device Distribution Properties', () => {
   it('total classrooms should equal assignments array length', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 0, max: 25 }).chain((numClassrooms) => {
-          if (numClassrooms === 0) return fc.constant([])
+        fc.integer({ min: 0, max: 25 }).chain((numClassrooms: number) => {
+          if (numClassrooms === 0) return fc.constant<ClassroomDeviceAssignment[]>([])
           const ids = Array.from({ length: numClassrooms }, (_, i) => i + 1)
           return fc.array(
             fc.integer({ min: 0, max: numClassrooms - 1 }).chain((idx) =>
               classroomAssignmentArb(ids[idx])
             ),
             { minLength: numClassrooms, maxLength: numClassrooms }
-          ).map((arr) => ids.map((id, i) => ({ ...arr[i], classroomId: id })))
+          ).map((arr) => ids.map((id, i) => ({ ...arr[i], classroomId: id }))) as fc.Arbitrary<ClassroomDeviceAssignment[]>
         }),
-        (assignments) => {
+        (assignments: ClassroomDeviceAssignment[]) => {
           const summary: ClassroomsSummary = {
             total: assignments.length,
             withDevices: countClassroomsWithDevices(assignments),

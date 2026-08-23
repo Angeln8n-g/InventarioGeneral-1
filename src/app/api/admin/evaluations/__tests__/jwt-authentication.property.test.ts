@@ -141,7 +141,7 @@ function generateInvalidAuthHeader(type: InvalidAuthHeaderType, randomValue?: st
     case 'no_bearer':
       return randomValue || 'some-token-without-bearer'
     case 'invalid_token':
-      return `Bearer ${randomValue || 'invalid.token.here'}`
+      return `Bearer ${randomValue || 'invalid-token-not-jwt'}`
     case 'malformed_bearer':
       return `bearer ${randomValue || 'token'}`
     case 'whitespace_only':
@@ -164,31 +164,31 @@ const evaluationEndpoints: EvaluationEndpoint[] = [
   // Templates endpoints
   { path: '/api/admin/evaluations/templates', method: 'GET', description: 'List templates' },
   { path: '/api/admin/evaluations/templates', method: 'POST', description: 'Create template' },
-  { path: '/api/admin/evaluations/templates/1', method: 'GET', description: 'Get template by ID' },
+  { path: '/api/admin/evaluations/templates/1', method: 'GET', description: 'Get template' },
   { path: '/api/admin/evaluations/templates/1', method: 'PUT', description: 'Update template' },
   { path: '/api/admin/evaluations/templates/1', method: 'DELETE', description: 'Delete template' },
   
+  // Template questions endpoints
+  { path: '/api/admin/evaluations/templates/1/questions', method: 'GET', description: 'List questions' },
+  { path: '/api/admin/evaluations/templates/1/questions', method: 'POST', description: 'Create question' },
+  { path: '/api/admin/evaluations/templates/1/questions/1', method: 'PUT', description: 'Update question' },
+  { path: '/api/admin/evaluations/templates/1/questions/1', method: 'DELETE', description: 'Delete question' },
+  
   // Schedule endpoints
   { path: '/api/admin/evaluations/schedule', method: 'GET', description: 'List scheduled evaluations' },
-  { path: '/api/admin/evaluations/schedule', method: 'POST', description: 'Create scheduled evaluation' },
-  { path: '/api/admin/evaluations/schedule/1', method: 'GET', description: 'Get scheduled evaluation by ID' },
+  { path: '/api/admin/evaluations/schedule', method: 'POST', description: 'Schedule evaluation' },
+  { path: '/api/admin/evaluations/schedule/1', method: 'GET', description: 'Get scheduled evaluation' },
   { path: '/api/admin/evaluations/schedule/1', method: 'PUT', description: 'Update scheduled evaluation' },
-  { path: '/api/admin/evaluations/schedule/1', method: 'DELETE', description: 'Delete scheduled evaluation' },
+  { path: '/api/admin/evaluations/schedule/1', method: 'DELETE', description: 'Cancel scheduled evaluation' },
   
-  // Calendar endpoint
-  { path: '/api/admin/evaluations/calendar', method: 'GET', description: 'Get calendar data' },
-  
-  // Questionnaire and submission endpoints
+  // Execution endpoints
   { path: '/api/admin/evaluations/1/questionnaire', method: 'GET', description: 'Get questionnaire' },
   { path: '/api/admin/evaluations/1/submit', method: 'POST', description: 'Submit evaluation' },
+  { path: '/api/admin/evaluations/1/approve', method: 'POST', description: 'Approve evaluation' },
   
-  // History endpoints
-  { path: '/api/admin/evaluations/history/1', method: 'GET', description: 'Get evaluation history' },
-  
-  // Reports endpoints
+  // History & Reports endpoints
+  { path: '/api/admin/evaluations/history/1', method: 'GET', description: 'Get classroom history' },
   { path: '/api/admin/evaluations/reports/responsible', method: 'GET', description: 'Get responsible report' },
-  { path: '/api/admin/evaluations/reports/space', method: 'GET', description: 'Get space report' },
-  { path: '/api/admin/evaluations/reports/general', method: 'GET', description: 'Get general report' },
 ]
 
 // ============================================================================
@@ -237,10 +237,10 @@ const malformedBearerPrefixArb = fc.constantFrom(
  * Generator for invalid JWT-like strings (wrong format)
  */
 const invalidJwtFormatArb = fc.oneof(
-  fc.constant('not.a.jwt'),
+  fc.constant('not-a-jwt'),
   fc.constant('only-one-part'),
   fc.constant('two.parts'),
-  fc.string({ minLength: 1, maxLength: 50 }).filter(s => !s.includes('.')),
+  fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.split('.').length !== 3),
   fc.constant(''),
   fc.constant('   '),
   fc.constant('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'), // Only header, no payload or signature

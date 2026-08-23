@@ -190,7 +190,7 @@ function generateInvalidAuthHeader(type: InvalidAuthHeaderType, randomValue?: st
     case 'no_bearer':
       return randomValue || 'some-token-without-bearer'
     case 'invalid_token':
-      return `Bearer ${randomValue || 'invalid.token.here'}`
+      return `Bearer ${randomValue || 'invalid-token-not-jwt'}`
     case 'malformed_bearer':
       return `bearer ${randomValue || 'token'}`
     case 'whitespace_only':
@@ -298,10 +298,10 @@ const malformedBearerPrefixArb = fc.constantFrom(
  * Generator for invalid JWT-like strings (wrong format)
  */
 const invalidJwtFormatArb = fc.oneof(
-  fc.constant('not.a.jwt'),
+  fc.constant('not-a-jwt'),
   fc.constant('only-one-part'),
   fc.constant('two.parts'),
-  fc.string({ minLength: 1, maxLength: 50 }).filter(s => !s.includes('.')),
+  fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.split('.').length !== 3),
   fc.constant(''),
   fc.constant('   '),
   fc.constant('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'), // Only header, no payload or signature
