@@ -43,15 +43,6 @@ export async function GET(request: NextRequest) {
       })
     })
   } catch (error: unknown) {
-    // Enhanced error logging
-    const errObj = error as { message?: string; details?: string; code?: string; stack?: string }
-    console.error('Notifications fetch error:', {
-      message: errObj?.message || (error instanceof Error ? error.message : 'Unknown error'),
-      details: errObj?.details || (error instanceof Error ? error.stack : (typeof error === 'object' ? JSON.stringify(error) : String(error))),
-      hint: 'Check database connection and Supabase configuration',
-      code: errObj?.code || '',
-    })
-
     if (error instanceof Error && error.name === 'AuthenticationError') {
       return NextResponse.json(
         {
@@ -77,6 +68,15 @@ export async function GET(request: NextRequest) {
         { status: 403 }
       )
     }
+
+    // Enhanced error logging for server errors
+    const errObj = error as { message?: string; details?: string; code?: string; stack?: string }
+    console.error('Notifications fetch error:', {
+      message: errObj?.message || (error instanceof Error ? error.message : 'Unknown error'),
+      details: errObj?.details || (error instanceof Error ? error.stack : (typeof error === 'object' ? JSON.stringify(error) : String(error))),
+      hint: 'Check database connection and Supabase configuration',
+      code: errObj?.code || '',
+    })
 
     // Return a more graceful error response
     return NextResponse.json(

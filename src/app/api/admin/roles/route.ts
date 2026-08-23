@@ -44,8 +44,6 @@ export async function GET(request: NextRequest) {
       })
     })
   } catch (error: unknown) {
-    console.error('Roles fetch error:', error)
-
     if (error instanceof Error && error.name === 'AuthenticationError') {
       return NextResponse.json(
         {
@@ -71,6 +69,8 @@ export async function GET(request: NextRequest) {
         { status: 403 }
       )
     }
+
+    console.error('Roles fetch error:', error)
 
     return NextResponse.json(
       {

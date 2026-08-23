@@ -156,17 +156,6 @@ export async function GET(request: NextRequest) {
       })
     })
   } catch (error: unknown) {
-    const errObj = error as { message?: string; details?: string; code?: string; stack?: string; cause?: unknown }
-    const errorMessage = errObj?.message || (error instanceof Error ? error.message : 'Unknown error')
-    const errorDetails = errObj?.details || (error instanceof Error ? error.stack : (typeof error === 'object' ? JSON.stringify(error) : String(error)))
-    
-    console.error('Dashboard stats error:', {
-      message: errorMessage,
-      details: errorDetails,
-      hint: errObj?.cause ? String(errObj.cause) : '',
-      code: errObj?.code ? String(errObj.code) : '',
-    })
-
     if (error instanceof Error && error.name === 'AuthenticationError') {
       return NextResponse.json(
         {
@@ -192,6 +181,17 @@ export async function GET(request: NextRequest) {
         { status: 403 }
       )
     }
+
+    const errObj = error as { message?: string; details?: string; code?: string; stack?: string; cause?: unknown }
+    const errorMessage = errObj?.message || (error instanceof Error ? error.message : 'Unknown error')
+    const errorDetails = errObj?.details || (error instanceof Error ? error.stack : (typeof error === 'object' ? JSON.stringify(error) : String(error)))
+    
+    console.error('Dashboard stats error:', {
+      message: errorMessage,
+      details: errorDetails,
+      hint: errObj?.cause ? String(errObj.cause) : '',
+      code: errObj?.code ? String(errObj.code) : '',
+    })
 
     // Handle fetch/network errors specifically
     if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {

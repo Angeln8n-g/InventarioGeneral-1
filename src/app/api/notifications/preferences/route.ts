@@ -13,8 +13,6 @@ export async function GET(request: NextRequest) {
       })
     })
   } catch (error: unknown) {
-    console.error('Notification preferences fetch error:', error)
-
     if (error instanceof Error && error.name === 'AuthenticationError') {
       return NextResponse.json(
         {
@@ -27,6 +25,21 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    if (error instanceof Error && error.name === 'AuthorizationError') {
+      return NextResponse.json(
+        {
+          error: {
+            code: ERROR_CODES.AUTHORIZATION_ERROR,
+            message: error.message,
+            timestamp: new Date().toISOString(),
+          },
+        },
+        { status: 403 }
+      )
+    }
+
+    console.error('Notification preferences fetch error:', error)
 
     return NextResponse.json(
       {

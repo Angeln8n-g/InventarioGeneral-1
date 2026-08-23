@@ -34,7 +34,27 @@ export async function GET(request: NextRequest) {
       })
     })
   } catch (error: any) {
-    return NextResponse.json({ error: { code: ERROR_CODES.DATABASE_ERROR, message: ERROR_MESSAGES.GENERIC_ERROR, timestamp: new Date().toISOString() } }, { status: 500 })
+    if (error?.name === 'AuthenticationError') {
+      return NextResponse.json({ 
+        error: { 
+          code: ERROR_CODES.AUTHENTICATION_ERROR, 
+          message: error.message, 
+          timestamp: new Date().toISOString() 
+        } 
+      }, { status: 401 })
+    }
+    
+    if (error?.name === 'AuthorizationError') {
+      return NextResponse.json({ 
+        error: { 
+          code: ERROR_CODES.AUTHORIZATION_ERROR, 
+          message: error.message, 
+          timestamp: new Date().toISOString() 
+        } 
+      }, { status: 403 })
+    }
+
+    return NextResponse.json({ error: { code: ERROR_CODES.DATABASE_ERROR, message: error?.message || ERROR_MESSAGES.GENERIC_ERROR, timestamp: new Date().toISOString() } }, { status: 500 })
   }
 }
 
