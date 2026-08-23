@@ -22,84 +22,66 @@ export async function GET(request: NextRequest) {
       // Calculate date range
       const { start, end } = getDateRange(timeRange, startDate, endDate)
 
-      // Get total consumables used
-      const { data: consumablesData, error: consumablesError } = await supabase
-        .from('consumable_requests')
-        .select('fulfilled_quantity, item_type_id')
-        .eq('status', 'fulfilled')
-        .gte('fulfilled_date', start)
-        .lte('fulfilled_date', end)
+      const nowISO = new Date().toISOString()
 
-      if (consumablesError) throw consumablesError
-
-      const totalConsumablesUsed = consumablesData?.reduce(
-        (sum, item) => sum + (item.fulfilled_quantity || 0),
-        0
-      ) || 0
-
-      // Try to calculate total cost if unit_cost column exists
-      let totalCost = 0
-      try {
-        const { data: costData } = await supabase
+      // Execute queries concurrently in parallel
+      const [
+        { data: consumablesData, error: consumablesError },
+        { data: loansData, error: loansError },
+        { data: overdueData, error: overdueError },
+        { data: stockData, error: stockError },
+        { data: costData },
+      ] = await Promise.all([
+        supabase
+          .from('consumable_requests')
+          .select('fulfilled_quantity, item_type_id')
+          .eq('status', 'fulfilled')
+          .gte('fulfilled_date', start)
+          .lte('fulfilled_date', end),
+        supabase
+          .from('loans')
+          .select('id, status, return_date, due_date')
+          .gte('loan_date', start)
+          .lte('loan_date', end),
+        supabase
+          .from('loans')
+          .select('id')
+          .eq('status', 'active')
+          .is('return_date', null)
+          .lt('due_date', nowISO),
+        supabase
+          .from('consumable_stock')
+          .select('id, current_quantity, minimum_threshold'),
+        supabase
           .from('consumable_requests')
           .select('fulfilled_quantity, item_types!inner(unit_cost)')
           .eq('status', 'fulfilled')
           .gte('fulfilled_date', start)
-          .lte('fulfilled_date', end)
-          .limit(1)
+          .lte('fulfilled_date', end),
+      ])
 
-        if (costData && costData.length > 0) {
-          // Column exists, calculate actual cost
-          const { data: allCostData } = await supabase
-            .from('consumable_requests')
-            .select('fulfilled_quantity, item_types!inner(unit_cost)')
-            .eq('status', 'fulfilled')
-            .gte('fulfilled_date', start)
-            .lte('fulfilled_date', end)
+      const firstError = consumablesError || loansError || overdueError || stockError
+      if (firstError) throw firstError
 
-          totalCost = allCostData?.reduce(
-            (sum, item: any) => sum + (item.fulfilled_quantity * (item.item_types?.unit_cost || 0)),
-            0
-          ) || 0
-        }
-      } catch (e) {
-        // Column doesn't exist yet, use 0
-        totalCost = 0
+      const totalConsumablesUsed = consumablesData?.reduce(
+        (sum: number, item: { fulfilled_quantity: number | null }) => sum + (item.fulfilled_quantity || 0),
+        0
+      ) || 0
+
+      let totalCost = 0
+      if (costData && Array.isArray(costData)) {
+        totalCost = costData.reduce(
+          (sum: number, item: any) => sum + ((item.fulfilled_quantity || 0) * (item.item_types?.unit_cost || 0)),
+          0
+        )
       }
 
-      // Get total loans and active loans
-      const { data: loansData, error: loansError } = await supabase
-        .from('loans')
-        .select('id, status, return_date, due_date')
-        .gte('loan_date', start)
-        .lte('loan_date', end)
-
-      if (loansError) throw loansError
-
       const totalLoans = loansData?.length || 0
-      const activeLoans = loansData?.filter(loan => loan.status === 'active').length || 0
-
-      // Get overdue loans
-      const { data: overdueData, error: overdueError } = await supabase
-        .from('loans')
-        .select('id')
-        .eq('status', 'active')
-        .is('return_date', null)
-        .lt('due_date', new Date().toISOString())
-
-      if (overdueError) throw overdueError
-
+      const activeLoans = loansData?.filter((loan: { status: string }) => loan.status === 'active').length || 0
       const overdueLoans = overdueData?.length || 0
 
-      // Get low stock items
-      const { data: stockData, error: stockError } = await supabase
-        .from('consumable_stock')
-        .select('id, current_quantity, minimum_threshold')
-
-      if (stockError) throw stockError
-
       const lowStockItems = stockData?.filter(
-        item => item.current_quantity <= item.minimum_threshold
+        (item: { current_quantity: number; minimum_threshold: number }) => item.current_quantity <= item.minimum_threshold
       ).length || 0
 
       return NextResponse.json({

@@ -208,10 +208,9 @@ export async function GET(request: NextRequest) {
       })
     })
   } catch (error: unknown) {
-    console.error('[Calendar API] GET error:', error)
-
     if (error instanceof Error) {
       if (error.name === 'AuthenticationError') {
+        console.warn('[Calendar API] Authentication expired or invalid token')
         return NextResponse.json(
           {
             error: {
@@ -225,6 +224,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (error.name === 'AuthorizationError') {
+        console.warn('[Calendar API] Access denied: insufficient permissions')
         return NextResponse.json(
           {
             error: {
@@ -237,6 +237,8 @@ export async function GET(request: NextRequest) {
         )
       }
     }
+
+    console.error('[Calendar API] GET error:', error)
 
     return NextResponse.json(
       {

@@ -14,54 +14,42 @@ export async function GET(request: NextRequest) {
 
       const { start, end } = getDateRange(timeRange, null, null)
 
-      // Get all users
-      const { data: users, error: usersError } = await supabase
-        .from('users')
-        .select('id, username, email')
+      // Execute queries concurrently in parallel
+      const [
+        { data: users, error: usersError },
+        { data: loans, error: loansError },
+        { data: activeLoans, error: activeLoansError },
+        { data: consumablesWithDate, error: consumablesDateError },
+        { data: allFulfilledConsumables, error: allConsumablesError },
+      ] = await Promise.all([
+        supabase.from('users').select('id, username, email'),
+        supabase
+          .from('loans')
+          .select('user_id, status')
+          .gte('loan_date', start)
+          .lte('loan_date', end),
+        supabase
+          .from('loans')
+          .select('user_id, status')
+          .in('status', ['active', 'overdue']),
+        supabase
+          .from('consumable_requests')
+          .select('user_id, fulfilled_quantity')
+          .eq('status', 'fulfilled')
+          .not('fulfilled_date', 'is', null)
+          .gte('fulfilled_date', start)
+          .lte('fulfilled_date', end),
+        supabase
+          .from('consumable_requests')
+          .select('user_id, fulfilled_quantity')
+          .eq('status', 'fulfilled'),
+      ])
 
-      if (usersError) throw usersError
+      const firstError = usersError || loansError || activeLoansError || consumablesDateError || allConsumablesError
+      if (firstError) throw firstError
 
-      // Get loans per user (within date range)
-      const { data: loans, error: loansError } = await supabase
-        .from('loans')
-        .select('user_id, status')
-        .gte('loan_date', start)
-        .lte('loan_date', end)
-
-      if (loansError) throw loansError
-
-      // Get ALL current active loans (active or overdue, not returned)
-      const { data: activeLoans, error: activeLoansError } = await supabase
-        .from('loans')
-        .select('user_id, status')
-        .in('status', ['active', 'overdue'])
-
-      if (activeLoansError) throw activeLoansError
-
-      // Get consumables per user - include all fulfilled requests
-      // First try with date filter, then get all fulfilled if no results
-      let consumables: { user_id: number; fulfilled_quantity: number }[] | null = null
-      
-      const { data: consumablesWithDate, error: consumablesDateError } = await supabase
-        .from('consumable_requests')
-        .select('user_id, fulfilled_quantity')
-        .eq('status', 'fulfilled')
-        .not('fulfilled_date', 'is', null)
-        .gte('fulfilled_date', start)
-        .lte('fulfilled_date', end)
-
-      if (consumablesDateError) throw consumablesDateError
-      
-      // Also get fulfilled consumables without date filter (for records where fulfilled_date might be null)
-      const { data: allFulfilledConsumables, error: allConsumablesError } = await supabase
-        .from('consumable_requests')
-        .select('user_id, fulfilled_quantity')
-        .eq('status', 'fulfilled')
-
-      if (allConsumablesError) throw allConsumablesError
-      
       // Use consumables with date if available, otherwise use all fulfilled
-      consumables = (consumablesWithDate && consumablesWithDate.length > 0) 
+      const consumables = (consumablesWithDate && consumablesWithDate.length > 0) 
         ? consumablesWithDate 
         : allFulfilledConsumables
 

@@ -7,95 +7,59 @@ import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
 export async function GET(request: NextRequest) {
   try {
     return await withPermission(request, PERMISSIONS.ADMIN_VIEW_DASHBOARD, async (_authContext) => {
-      // Get total tools count
-      const { count: totalTools, error: toolsError } = await supabase
-        .from('tool_instances')
-        .select('*', { count: 'exact', head: true })
-
-      if (toolsError) throw toolsError
-
-      // Get available tools count
-      const { count: availableTools, error: availableError } = await supabase
-        .from('tool_instances')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'available')
-
-      if (availableError) throw availableError
-
-      // Get loaned tools count
-      const { count: loanedTools, error: loanedError } = await supabase
-        .from('tool_instances')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'loaned')
-
-      if (loanedError) throw loanedError
-
-      // Get active loans count
-      const { count: activeLoans, error: activeLoansError } = await supabase
-        .from('loans')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active')
-
-      if (activeLoansError) throw activeLoansError
-
-      // Get overdue loans count
       const now = new Date().toISOString()
-      const { count: overdueLoans, error: overdueError } = await supabase
-        .from('loans')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active')
-        .lt('due_date', now)
 
-      if (overdueError) throw overdueError
+      // Run all queries in parallel to drastically improve response time and prevent timeouts
+      const [
+        { count: totalTools, error: toolsError },
+        { count: availableTools, error: availableError },
+        { count: loanedTools, error: loanedError },
+        { count: activeLoans, error: activeLoansError },
+        { count: overdueLoans, error: overdueError },
+        { count: totalUsers, error: usersError },
+        { count: consumableTypes, error: consumableTypesError },
+        { count: totalConsumables, error: totalConsumablesError },
+        { data: lowStockData, error: lowStockError },
+        { count: totalElectronics, error: electronicsError },
+        { data: toolsByCategory, error: toolsByCategoryError },
+        { data: consumablesByCategory, error: consumablesByCategoryError },
+        { count: maintenanceTools, error: maintenanceError },
+      ] = await Promise.all([
+        supabase.from('tool_instances').select('id', { count: 'exact', head: true }),
+        supabase.from('tool_instances').select('id', { count: 'exact', head: true }).eq('status', 'available'),
+        supabase.from('tool_instances').select('id', { count: 'exact', head: true }).eq('status', 'loaned'),
+        supabase.from('loans').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('loans').select('id', { count: 'exact', head: true }).eq('status', 'active').lt('due_date', now),
+        supabase.from('users').select('id', { count: 'exact', head: true }),
+        supabase.from('item_types').select('id', { count: 'exact', head: true }).eq('is_consumable', true),
+        supabase.from('consumable_stock').select('id', { count: 'exact', head: true }),
+        supabase.from('consumable_stock').select('current_quantity, minimum_threshold'),
+        supabase.from('electronic_devices').select('id', { count: 'exact', head: true }),
+        supabase.from('tool_instances').select(`item_type:item_types(category)`),
+        supabase.from('consumable_stock').select(`item_type:item_types(category)`),
+        supabase.from('tool_instances').select('id', { count: 'exact', head: true }).in('status', ['maintenance', 'out-of-service', 'damaged']),
+      ])
 
-      // Get total users count
-      const { count: totalUsers, error: usersError } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true })
+      const firstError =
+        toolsError ||
+        availableError ||
+        loanedError ||
+        activeLoansError ||
+        overdueError ||
+        usersError ||
+        consumableTypesError ||
+        totalConsumablesError ||
+        lowStockError ||
+        electronicsError ||
+        toolsByCategoryError ||
+        consumablesByCategoryError ||
+        maintenanceError
 
-      if (usersError) throw usersError
-
-      // Get consumable types count
-      const { count: consumableTypes, error: consumableTypesError } = await supabase
-        .from('item_types')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_consumable', true)
-
-      if (consumableTypesError) throw consumableTypesError
-
-      // Get total consumables count (number of consumable_stock records)
-      const { count: totalConsumables, error: totalConsumablesError } = await supabase
-        .from('consumable_stock')
-        .select('*', { count: 'exact', head: true })
-
-      if (totalConsumablesError) throw totalConsumablesError
-
-      // Get low stock items count
-      const { data: lowStockData, error: lowStockError } = await supabase
-        .from('consumable_stock')
-        .select('current_quantity, minimum_threshold')
-
-      if (lowStockError) throw lowStockError
+      if (firstError) throw firstError
 
       const lowStockItems = lowStockData?.filter(
         item => item.current_quantity <= item.minimum_threshold
       ).length || 0
-
-      // Get total electronics count
-      const { count: totalElectronics, error: electronicsError } = await supabase
-        .from('electronic_devices')
-        .select('*', { count: 'exact', head: true })
-
-      if (electronicsError) throw electronicsError
-
-      // Get tools by category
-      const { data: toolsByCategory, error: toolsByCategoryError } = await supabase
-        .from('tool_instances')
-        .select(`
-          item_type:item_types(category)
-        `)
-
-      if (toolsByCategoryError) throw toolsByCategoryError
 
       // Group tools by category
       const toolsCategoryCount: Record<string, number> = {}
@@ -108,15 +72,6 @@ export async function GET(request: NextRequest) {
         count,
       }))
 
-      // Get consumables by category
-      const { data: consumablesByCategory, error: consumablesByCategoryError } = await supabase
-        .from('consumable_stock')
-        .select(`
-          item_type:item_types(category)
-        `)
-
-      if (consumablesByCategoryError) throw consumablesByCategoryError
-
       // Group consumables by category
       const consumablesCategoryCount: Record<string, number> = {}
       consumablesByCategory?.forEach(item => {
@@ -127,14 +82,6 @@ export async function GET(request: NextRequest) {
         category,
         count,
       }))
-
-      // Get maintenance tools count
-      const { count: maintenanceTools, error: maintenanceError } = await supabase
-        .from('tool_instances')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['maintenance', 'out-of-service', 'damaged'])
-
-      if (maintenanceError) throw maintenanceError
 
       return NextResponse.json({
         data: {
@@ -182,10 +129,27 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const errObj = error as { message?: string; details?: string; code?: string; stack?: string; cause?: unknown }
+    const errObj = error as { name?: string; message?: string; details?: string; code?: string; stack?: string; cause?: unknown }
     const errorMessage = errObj?.message || (error instanceof Error ? error.message : 'Unknown error')
+    const errorName = errObj?.name || (error instanceof Error ? error.name : '')
+
+    // Gracefully handle aborted requests (client disconnect / timeout)
+    if (errorName === 'AbortError' || errorMessage.includes('aborted') || errorMessage.includes('AbortError')) {
+      console.warn('Dashboard stats request was aborted (client disconnected or timed out)')
+      return NextResponse.json(
+        {
+          error: {
+            code: 'REQUEST_ABORTED',
+            message: 'La solicitud fue cancelada o expiró.',
+            timestamp: new Date().toISOString(),
+          },
+        },
+        { status: 499 }
+      )
+    }
+
     const errorDetails = errObj?.details || (error instanceof Error ? error.stack : (typeof error === 'object' ? JSON.stringify(error) : String(error)))
-    
+
     console.error('Dashboard stats error:', {
       message: errorMessage,
       details: errorDetails,
@@ -219,3 +183,4 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
