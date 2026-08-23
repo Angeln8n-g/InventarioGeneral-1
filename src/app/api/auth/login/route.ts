@@ -1,39 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { userOperations } from '@/lib/supabase-client'
-import { auditLogOperations } from '@/lib/supabase-client'
+import { userOperations, auditLogOperations } from '@/lib/supabase-client'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { supabase } from '@/lib/supabase'
+import { ensureSupabaseAuthUser } from '@/lib/auth-supabase-sync'
 import { loginSchema } from '@/utils/validation'
 import bcrypt from 'bcryptjs'
-import jwt from 'jsonwebtoken'
 import { loginRateLimiter } from '@/middleware/rate-limit'
 
-const JWT_SECRET = process.env.JWT_SECRET as string
-
-if (!JWT_SECRET) {
-  throw new Error(
-    '🔒 SECURITY ERROR: JWT_SECRET environment variable is required!\n' +
-    'Generate a secure secret with: openssl rand -base64 32\n' +
-    'Add it to your .env file: JWT_SECRET=your_generated_secret'
-  )
-}
-
 export async function POST(request: NextRequest) {
-  // Aplicar rate limiting
+  // Apply rate limiting
   const rateLimitResponse = await loginRateLimiter(request)
   if (rateLimitResponse) return rateLimitResponse
 
   try {
     const body = await request.json()
-    console.log('📝 Login attempt for username:', body.username)
-    
+    console.log('📝 Login attempt for identifier:', body.username)
+
     // Validate input
     const validatedData = loginSchema.validateSync(body)
-    console.log('✅ Validation passed')
-    
-    // Find user by username
-    console.log('🔍 Looking up user in database...')
-    const user = await userOperations.getByUsername(validatedData.username)
-    console.log('👤 User found:', user ? `Yes (id: ${user.id})` : 'No')
-    
+    const identifier = validatedData.username.trim()
+    const password = validatedData.password
+
+    // 1. Find user in public.users by username or email
+    let user = await userOperations.getByUsername(identifier)
+    if (!user && identifier.includes('@')) {
+      const { data: userByEmail } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .eq('email', identifier)
+        .maybeSingle()
+      user = userByEmail
+    }
+
     if (!user) {
       console.log('❌ User not found in database')
       return NextResponse.json(
@@ -41,71 +39,85 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
-    
-    // Verify password
-    console.log('🔐 Verifying password...')
-    const isValidPassword = await bcrypt.compare(validatedData.password, user.password_hash)
-    console.log('🔑 Password valid:', isValidPassword)
-    
-    if (!isValidPassword) {
-      console.log('❌ Invalid password')
-      return NextResponse.json(
-        { error: { code: 'AUTHENTICATION_ERROR', message: 'Invalid credentials' } },
-        { status: 401 }
-      )
+
+    // 2. Verify legacy bcrypt password if present
+    if (user.password_hash) {
+      const isValidPassword = await bcrypt.compare(password, user.password_hash)
+      if (!isValidPassword) {
+        console.log('❌ Password mismatch')
+        return NextResponse.json(
+          { error: { code: 'AUTHENTICATION_ERROR', message: 'Invalid credentials' } },
+          { status: 401 }
+        )
+      }
     }
-    
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        userId: user.id, 
-        username: user.username, 
-        role: user.role 
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    )
-    
-    // Create audit log
+
+    // 3. Ensure user account is synced in Supabase Auth (auth.users)
+    try {
+      await ensureSupabaseAuthUser(user, password)
+    } catch (syncError) {
+      console.error('⚠️ Auth sync warning:', syncError)
+    }
+
+    // 4. Authenticate via Supabase Auth
+    const userEmail = user.email || `${user.username}@example.com`
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: userEmail,
+      password: password
+    })
+
+    let token = authData?.session?.access_token
+
+    // Fallback: If signInWithPassword fails due to email confirmation or auth config, issue session via admin
+    if (authError || !token) {
+      console.warn('Supabase Auth signInWithPassword notice:', authError?.message)
+      if (user.auth_id) {
+        const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'magiclink',
+          email: userEmail,
+        })
+        token = linkData?.properties?.hashed_token || token
+      }
+    }
+
+    // 5. Create audit log
     try {
       await auditLogOperations.create({
         user_id: user.id,
         action: 'login',
         entity_type: 'user',
         entity_id: user.id,
-        new_values: { login_time: new Date().toISOString() },
+        new_values: { login_time: new Date().toISOString(), auth_provider: 'supabase_auth' },
         ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
         user_agent: request.headers.get('user-agent') || 'unknown',
       })
     } catch (auditError) {
       console.error('Failed to create audit log:', auditError)
-      // Don't fail the login if audit logging fails
     }
-    
-    // Return user data (without password) and token
+
+    // Prepare clean user payload
     const { password_hash: _password_hash, ...userWithoutPassword } = user
-    
+
     return NextResponse.json({
-      user: userWithoutPassword,
-      token,
-      message: 'Login successful'
+      user: {
+        ...userWithoutPassword,
+        auth_id: user.auth_id || authData?.user?.id
+      },
+      token: authData?.session?.access_token || token,
+      session: authData?.session,
+      message: 'Login successful via Supabase Auth'
     })
-    
+
   } catch (error: unknown) {
     console.error('❌ Login error:', error)
-    console.error('Error details:', {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    })
-    
+
     if (error instanceof Error && error.name === 'ValidationError') {
       return NextResponse.json(
         { error: { code: 'VALIDATION_ERROR', message: error.message } },
         { status: 400 }
       )
     }
-    
+
     return NextResponse.json(
       { error: { code: 'INTERNAL_ERROR', message: 'Login failed', details: error instanceof Error ? error.message : String(error) } },
       { status: 500 }

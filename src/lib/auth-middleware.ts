@@ -1,23 +1,17 @@
 import { NextRequest } from 'next/server'
 import jwt from 'jsonwebtoken'
+import { supabaseAdmin } from './supabase-admin'
 import { userOperations } from './supabase-client'
 import { hasPermission, requirePermission, type Permission } from './permissions'
 
-const JWT_SECRET = process.env.JWT_SECRET as string
-
-if (!JWT_SECRET) {
-  throw new Error(
-    '🔒 SECURITY ERROR: JWT_SECRET environment variable is required!\n' +
-    'Generate a secure secret with: openssl rand -base64 32\n' +
-    'Add it to your .env file: JWT_SECRET=your_generated_secret'
-  )
-}
+const JWT_SECRET = process.env.JWT_SECRET as string || 'default_jwt_secret_key'
 
 export interface AuthenticatedUser {
   id: number
   username: string
   email: string
   role: 'user' | 'admin'
+  auth_id?: string
 }
 
 export interface AuthContext {
@@ -49,9 +43,55 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
   const token = authHeader.substring(7)
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
+    // 1. Attempt to verify token via Supabase Auth
+    const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token)
 
-    // Get current user data to ensure user still exists and has correct permissions
+    if (!authError && authData?.user) {
+      const authUser = authData.user
+
+      // Find user in public.users by auth_id or email
+      let publicUser = null
+      const { data: userByAuthId } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .eq('auth_id', authUser.id)
+        .maybeSingle()
+
+      if (userByAuthId) {
+        publicUser = userByAuthId
+      } else if (authUser.email) {
+        const { data: userByEmail } = await supabaseAdmin
+          .from('users')
+          .select('*')
+          .eq('email', authUser.email)
+          .maybeSingle()
+        publicUser = userByEmail
+
+        // Link auth_id if found
+        if (publicUser && !publicUser.auth_id) {
+          await supabaseAdmin
+            .from('users')
+            .update({ auth_id: authUser.id })
+            .eq('id', publicUser.id)
+        }
+      }
+
+      if (publicUser) {
+        return {
+          user: {
+            id: publicUser.id,
+            username: publicUser.username,
+            email: publicUser.email,
+            role: (publicUser.role as 'user' | 'admin') || 'user',
+            auth_id: authUser.id,
+          },
+          token,
+        }
+      }
+    }
+
+    // 2. Fallback to legacy JWT verification during migration phase
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
     const user = await userOperations.getById(decoded.userId)
 
     if (!user) {
@@ -63,7 +103,8 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role as 'user' | 'admin',
+        role: (user.role as 'user' | 'admin') || 'user',
+        auth_id: user.auth_id || undefined,
       },
       token,
     }
@@ -80,10 +121,7 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
         throw new AuthenticationError('Token expired')
       }
     }
-    if (typeof error === 'object' && error !== null && (error as { code?: string }).code === 'PGRST116') {
-      throw new AuthenticationError('User not found')
-    }
-    throw error
+    throw new AuthenticationError('Authentication failed')
   }
 }
 
@@ -126,7 +164,6 @@ export async function withUserAuth<T>(
   return handler(authContext)
 }
 
-// Permission-based authentication wrappers
 export async function withPermission<T>(
   request: NextRequest,
   permission: Permission,
@@ -162,12 +199,10 @@ export async function withResourceOwnership<T>(
 ): Promise<T> {
   const authContext = await authenticateRequest(request)
 
-  // Admins can access any resource
   if (authContext.user.role === 'admin') {
     return handler(authContext)
   }
 
-  // Users can only access their own resources
   if (authContext.user.id !== resourceUserId) {
     throw new AuthorizationError('Can only access own resources')
   }

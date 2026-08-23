@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
 import { auditLogOperations } from '@/lib/supabase-client'
@@ -31,10 +31,9 @@ export async function GET(
                 )
             }
 
-            // Get user from database
-            const { data: user, error } = await supabase
+            const { data: user, error } = await supabaseAdmin
                 .from('users')
-                .select('id, username, email, role, full_name, created_at, updated_at')
+                .select('id, username, email, role, full_name, auth_id, created_at, updated_at')
                 .eq('id', userId)
                 .single()
 
@@ -126,7 +125,6 @@ export async function PUT(
             const body = await request.json()
             const { email, role, full_name } = body
 
-            // Validate input
             if (!email && !role && !full_name) {
                 return NextResponse.json(
                     {
@@ -140,7 +138,6 @@ export async function PUT(
                 )
             }
 
-            // Validate role if provided
             if (role && !['admin', 'user'].includes(role)) {
                 return NextResponse.json(
                     {
@@ -154,7 +151,6 @@ export async function PUT(
                 )
             }
 
-            // Validate email format if provided
             if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                 return NextResponse.json(
                     {
@@ -168,10 +164,9 @@ export async function PUT(
                 )
             }
 
-            // Get current user data for audit log
-            const { data: currentUser, error: fetchError } = await supabase
+            const { data: currentUser, error: fetchError } = await supabaseAdmin
                 .from('users')
-                .select('id, username, email, role, full_name')
+                .select('id, username, email, role, full_name, auth_id')
                 .eq('id', userId)
                 .single()
 
@@ -188,7 +183,6 @@ export async function PUT(
                 )
             }
 
-            // Prevent user from changing their own role
             if (userId === authContext.user.id && role && role !== currentUser.role) {
                 return NextResponse.json(
                     {
@@ -202,9 +196,8 @@ export async function PUT(
                 )
             }
 
-            // Check if email is already taken by another user
             if (email && email !== currentUser.email) {
-                const { data: existingUser } = await supabase
+                const { data: existingUser } = await supabaseAdmin
                     .from('users')
                     .select('id')
                     .eq('email', email)
@@ -225,7 +218,6 @@ export async function PUT(
                 }
             }
 
-            // Build update object
             const updateData: Record<string, unknown> = {
                 updated_at: new Date().toISOString(),
             }
@@ -234,19 +226,30 @@ export async function PUT(
             if (role) updateData.role = role
             if (full_name !== undefined) updateData.full_name = full_name
 
-            // Update user
-            const { data: updatedUser, error: updateError } = await supabase
+            const { data: updatedUser, error: updateError } = await supabaseAdmin
                 .from('users')
                 .update(updateData)
                 .eq('id', userId)
-                .select('id, username, email, role, full_name, created_at, updated_at')
+                .select('id, username, email, role, full_name, auth_id, created_at, updated_at')
                 .single()
 
             if (updateError) {
                 throw updateError
             }
 
-            // Create audit log
+            // Sync email/metadata with Supabase Auth if auth_id exists
+            if (currentUser.auth_id) {
+                await supabaseAdmin.auth.admin.updateUserById(currentUser.auth_id, {
+                    email: email || currentUser.email,
+                    user_metadata: {
+                        username: currentUser.username,
+                        full_name: full_name ?? currentUser.full_name,
+                        role: role || currentUser.role
+                    }
+                }).catch((err) => console.error('Error updating auth.users:', err))
+            }
+
+            // Audit log
             try {
                 await auditLogOperations.create({
                     user_id: authContext.user.id,
@@ -322,7 +325,7 @@ export async function PUT(
 
 /**
  * DELETE /api/admin/users/[id]
- * Delete a user (soft delete by setting inactive status)
+ * Delete a user
  */
 export async function DELETE(
     request: NextRequest,
@@ -346,7 +349,6 @@ export async function DELETE(
                 )
             }
 
-            // Prevent user from deleting themselves
             if (userId === authContext.user.id) {
                 return NextResponse.json(
                     {
@@ -360,10 +362,9 @@ export async function DELETE(
                 )
             }
 
-            // Get user data for audit log
-            const { data: user, error: fetchError } = await supabase
+            const { data: user, error: fetchError } = await supabaseAdmin
                 .from('users')
-                .select('id, username, email, role')
+                .select('id, username, email, role, auth_id')
                 .eq('id', userId)
                 .single()
 
@@ -380,14 +381,19 @@ export async function DELETE(
                 )
             }
 
-            // Delete user (CASCADE will handle related records)
-            const { error: deleteError } = await supabase.from('users').delete().eq('id', userId)
+            // Delete from auth.users if auth_id exists
+            if (user.auth_id) {
+                await supabaseAdmin.auth.admin.deleteUser(user.auth_id).catch((err) =>
+                    console.error('Error deleting from auth.users:', err)
+                )
+            }
+
+            const { error: deleteError } = await supabaseAdmin.from('users').delete().eq('id', userId)
 
             if (deleteError) {
                 throw deleteError
             }
 
-            // Create audit log
             try {
                 await auditLogOperations.create({
                     user_id: authContext.user.id,

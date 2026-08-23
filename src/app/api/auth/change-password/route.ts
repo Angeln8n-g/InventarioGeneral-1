@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { withAuth } from '@/lib/auth-middleware'
 
 export async function PUT(request: NextRequest) {
   try {
     return await withAuth(request, async (authContext) => {
-      // Get request body
       const body = await request.json()
       const { currentPassword, newPassword } = body
 
-      // Validate input
       if (!currentPassword || !newPassword) {
         return NextResponse.json(
           { error: { message: 'Current password and new password are required' } },
@@ -26,9 +24,9 @@ export async function PUT(request: NextRequest) {
       }
 
       // Get user from database
-      const { data: user, error: userError } = await supabase
+      const { data: user, error: userError } = await supabaseAdmin
         .from('users')
-        .select('id, password_hash')
+        .select('id, password_hash, auth_id, email')
         .eq('id', authContext.user.id)
         .single()
 
@@ -39,24 +37,34 @@ export async function PUT(request: NextRequest) {
         )
       }
 
-      // Verify current password
-      const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash)
-      
-      if (!isValidPassword) {
-        return NextResponse.json(
-          { error: { message: 'Current password is incorrect' } },
-          { status: 401 }
-        )
+      // Verify current password if legacy password_hash exists
+      if (user.password_hash) {
+        const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash)
+        if (!isValidPassword) {
+          return NextResponse.json(
+            { error: { message: 'Current password is incorrect' } },
+            { status: 401 }
+          )
+        }
       }
 
-      // Hash new password
+      // Update in Supabase Auth if auth_id exists
+      if (user.auth_id) {
+        const { error: supabaseAuthError } = await supabaseAdmin.auth.admin.updateUserById(user.auth_id, {
+          password: newPassword
+        })
+        if (supabaseAuthError) {
+          console.error('Error updating password in Supabase Auth:', supabaseAuthError)
+        }
+      }
+
+      // Update password_hash in public.users
       const saltRounds = 12
       const newPasswordHash = await bcrypt.hash(newPassword, saltRounds)
 
-      // Update password in database
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from('users')
-        .update({ 
+        .update({
           password_hash: newPasswordHash,
           updated_at: new Date().toISOString()
         })
@@ -72,7 +80,7 @@ export async function PUT(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Password changed successfully'
+        message: 'Password changed successfully in Supabase Auth'
       })
     })
   } catch (error) {
@@ -83,5 +91,3 @@ export async function PUT(request: NextRequest) {
     )
   }
 }
-
-

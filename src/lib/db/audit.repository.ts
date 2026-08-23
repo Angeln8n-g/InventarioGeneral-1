@@ -1,13 +1,16 @@
 import { supabase } from '../supabase'
+import { supabaseAdmin } from '../supabase-admin'
 import type {
   AuditLog,
   CreateAuditLogInput,
   AuditLogFilters,
 } from '@/types/database'
 
+const dbClient = supabaseAdmin || supabase
+
 export const auditLogOperations = {
   async create(input: CreateAuditLogInput): Promise<AuditLog> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('audit_logs')
       .insert(input)
       .select(`
@@ -21,7 +24,7 @@ export const auditLogOperations = {
   },
 
   async getAll(filters?: AuditLogFilters): Promise<AuditLog[]> {
-    let query = supabase
+    let query = dbClient
       .from('audit_logs')
       .select(`
         *,
@@ -65,7 +68,7 @@ export const auditLogOperations = {
     action?: string
   }): Promise<{ items: AuditLog[]; nextCursor: { createdAt: string; id: number } | null }> {
     const limit = params.limit || 20
-    let query = supabase
+    let query = dbClient
       .from('audit_logs')
       .select(`
         *,

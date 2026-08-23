@@ -12,8 +12,8 @@ ALTER TABLE public.device_categories ADD COLUMN IF NOT EXISTS deleted_at TIMESTA
 -- 2. Create partial indexes for optimal queries filtering non-deleted records
 CREATE INDEX IF NOT EXISTS idx_item_types_not_deleted ON public.item_types (id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_tool_instances_not_deleted ON public.tool_instances (id, status) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_electronic_devices_not_deleted ON public.electronic_devices (id, status) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_classrooms_not_deleted ON public.classrooms (id, is_active) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_electronic_devices_not_deleted ON public.electronic_devices (id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_classrooms_not_deleted ON public.classrooms (id, status) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_device_categories_not_deleted ON public.device_categories (id, is_active) WHERE deleted_at IS NULL;
 
 -- 3. Stored Procedure for Safe Soft Delete

@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { supabaseAdmin } from '../supabase-admin'
 import type {
   Classroom,
   CreateClassroomInput,
@@ -19,9 +20,11 @@ import type {
   UpdateInternetServiceInput 
 } from '@/types/classrooms'
 
+const dbClient = supabaseAdmin || supabase
+
 export const classroomOperations = {
   async create(input: CreateClassroomInput): Promise<Classroom> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classrooms')
       .insert({
         name: input.name,
@@ -39,7 +42,7 @@ export const classroomOperations = {
   },
 
   async getAll(): Promise<(ClassroomWithDeviceCount & { is_reserved: boolean; current_reservation?: string })[]> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classrooms')
       .select('*')
       .is('deleted_at', null)
@@ -48,7 +51,7 @@ export const classroomOperations = {
     const classrooms = data || []
     
     // Compute device counts
-    const { data: assignments } = await supabase
+    const { data: assignments } = await dbClient
       .from('device_assignments')
       .select('classroom_id, is_active')
       .eq('is_active', true)
@@ -59,7 +62,7 @@ export const classroomOperations = {
     
     // Check current reservations
     const now = new Date().toISOString()
-    const { data: reservations } = await supabase
+    const { data: reservations } = await dbClient
       .from('classroom_reservations')
       .select('classroom_id, title')
       .lte('start_datetime', now)
@@ -89,23 +92,23 @@ export const classroomOperations = {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
 
-    const { count: totalReservations } = await supabase
+    const { count: totalReservations } = await dbClient
       .from('classroom_reservations')
       .select('*', { count: 'exact', head: true })
 
-    const { count: activeReservations } = await supabase
+    const { count: activeReservations } = await dbClient
       .from('classroom_reservations')
       .select('*', { count: 'exact', head: true })
       .in('status', ['pending', 'confirmed'])
       .gte('end_datetime', now.toISOString())
 
-    const { count: reservationsThisMonth } = await supabase
+    const { count: reservationsThisMonth } = await dbClient
       .from('classroom_reservations')
       .select('*', { count: 'exact', head: true })
       .gte('start_datetime', startOfMonth)
       .lte('start_datetime', endOfMonth)
 
-    const { count: internetServicesCount } = await supabase
+    const { count: internetServicesCount } = await dbClient
       .from('classroom_internet_services')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active')
@@ -119,14 +122,14 @@ export const classroomOperations = {
   },
 
   async getById(id: number): Promise<ClassroomWithDeviceCount | null> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classrooms')
       .select('*')
       .eq('id', id)
       .single()
     if (error && error.code !== 'PGRST116') throw error
     if (!data) return null
-    const { data: assignments } = await supabase
+    const { data: assignments } = await dbClient
       .from('device_assignments')
       .select('id')
       .eq('classroom_id', id)
@@ -136,7 +139,7 @@ export const classroomOperations = {
   },
 
   async update(id: number, input: UpdateClassroomInput): Promise<Classroom> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classrooms')
       .update({
         ...input,
@@ -150,7 +153,7 @@ export const classroomOperations = {
   },
 
   async delete(id: number, softDelete = true): Promise<void> {
-    const { data: assignments } = await supabase
+    const { data: assignments } = await dbClient
       .from('device_assignments')
       .select('id')
       .eq('classroom_id', id)
@@ -162,13 +165,13 @@ export const classroomOperations = {
     }
     
     if (softDelete) {
-      const { error } = await supabase
+      const { error } = await dbClient
         .from('classrooms')
         .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq('id', id)
       if (error) throw error
     } else {
-      const { error } = await supabase
+      const { error } = await dbClient
         .from('classrooms')
         .delete()
         .eq('id', id)
@@ -179,7 +182,7 @@ export const classroomOperations = {
 
 export const assignmentOperations = {
   async create(input: CreateDeviceAssignmentInput, userId?: number): Promise<DeviceAssignmentWithDetails> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('device_assignments')
       .insert({
         electronic_device_id: input.electronic_device_id,
@@ -198,7 +201,7 @@ export const assignmentOperations = {
   },
 
   async getAll(filters?: { classroom_id?: number; electronic_device_id?: number; status?: 'active' | 'removed' }): Promise<DeviceAssignmentWithDetails[]> {
-    let query = supabase
+    let query = dbClient
       .from('device_assignments')
       .select(`
         *,
@@ -217,7 +220,7 @@ export const assignmentOperations = {
   },
 
   async getById(id: number): Promise<DeviceAssignmentWithDetails | null> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('device_assignments')
       .select(`
         *,
@@ -241,7 +244,7 @@ export const assignmentOperations = {
   },
 
   async remove(id: number, userId?: number): Promise<DeviceAssignment> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('device_assignments')
       .update({
         is_active: false,
@@ -259,7 +262,7 @@ export const assignmentOperations = {
 
 export const combinationOperations = {
   async create(input: CreateDeviceCombinationInput, userId?: number): Promise<DeviceCombinationWithDetails> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('device_combinations')
       .insert({
         device_1_id: input.device_1_id,
@@ -279,7 +282,7 @@ export const combinationOperations = {
   },
 
   async getAll(filters?: { classroom_id?: number }): Promise<DeviceCombinationWithDetails[]> {
-    let query = supabase
+    let query = dbClient
       .from('device_combinations')
       .select(`
         *,
@@ -290,7 +293,7 @@ export const combinationOperations = {
       .eq('is_active', true)
       .order('created_at', { ascending: false })
     if (filters?.classroom_id) {
-      const { data: assignments } = await supabase
+      const { data: assignments } = await dbClient
         .from('device_assignments')
         .select('electronic_device_id')
         .eq('classroom_id', filters.classroom_id)
@@ -308,7 +311,7 @@ export const combinationOperations = {
       deviceIds.add(c.device_2_id)
     })
 
-    const { data: assignments } = await supabase
+    const { data: assignments } = await dbClient
       .from('device_assignments')
       .select(`
         electronic_device_id,
@@ -340,7 +343,7 @@ export const combinationOperations = {
   },
 
   async getById(id: number): Promise<DeviceCombinationWithDetails | null> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('device_combinations')
       .select(`
         *,
@@ -358,7 +361,7 @@ export const combinationOperations = {
   },
 
   async remove(id: number, userId?: number): Promise<DeviceCombination> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('device_combinations')
       .update({
         is_active: false,
@@ -376,7 +379,7 @@ export const combinationOperations = {
 
 export const classroomReservationOperations = {
   async create(input: CreateClassroomReservationInput, userId: number): Promise<ClassroomReservation> {
-    const { data: existing } = await supabase
+    const { data: existing } = await dbClient
       .from('classroom_reservations')
       .select('id')
       .eq('classroom_id', input.classroom_id)
@@ -389,7 +392,7 @@ export const classroomReservationOperations = {
       throw err
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classroom_reservations')
       .insert({
         classroom_id: input.classroom_id,
@@ -408,7 +411,7 @@ export const classroomReservationOperations = {
   },
 
   async getByClassroom(classroomId: number): Promise<ClassroomReservationWithDetails[]> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classroom_reservations')
       .select(`
         *,
@@ -428,7 +431,7 @@ export const classroomReservationOperations = {
   },
 
   async getById(id: number): Promise<ClassroomReservationWithDetails | null> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classroom_reservations')
       .select(`
         *,
@@ -449,7 +452,7 @@ export const classroomReservationOperations = {
   },
 
   async update(id: number, input: UpdateClassroomReservationInput): Promise<ClassroomReservation> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classroom_reservations')
       .update({
         ...input,
@@ -463,7 +466,7 @@ export const classroomReservationOperations = {
   },
 
   async delete(id: number): Promise<void> {
-    const { error } = await supabase
+    const { error } = await dbClient
       .from('classroom_reservations')
       .delete()
       .eq('id', id)
@@ -473,7 +476,7 @@ export const classroomReservationOperations = {
 
 export const internetServiceOperations = {
   async create(input: CreateInternetServiceInput, userId?: number): Promise<ClassroomInternetService> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classroom_internet_services')
       .insert({
         ...input,
@@ -487,7 +490,7 @@ export const internetServiceOperations = {
   },
 
   async getByClassroom(classroomId: number): Promise<ClassroomInternetService[]> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classroom_internet_services')
       .select('*')
       .eq('classroom_id', classroomId)
@@ -497,7 +500,7 @@ export const internetServiceOperations = {
   },
 
   async getById(id: number): Promise<ClassroomInternetService | null> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classroom_internet_services')
       .select('*')
       .eq('id', id)
@@ -507,7 +510,7 @@ export const internetServiceOperations = {
   },
 
   async update(id: number, input: UpdateInternetServiceInput): Promise<ClassroomInternetService> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('classroom_internet_services')
       .update({
         ...input,
@@ -521,7 +524,7 @@ export const internetServiceOperations = {
   },
 
   async delete(id: number): Promise<void> {
-    const { error } = await supabase
+    const { error } = await dbClient
       .from('classroom_internet_services')
       .delete()
       .eq('id', id)

@@ -1,35 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
-import type { User } from '@/types/database'
 
 export async function GET(request: NextRequest) {
   try {
     return await withPermission(request, PERMISSIONS.USERS_VIEW_ALL, async (authContext) => {
       const { searchParams } = new URL(request.url)
-      
-      // Get query parameters
       const role = searchParams.get('role')
-      
-      // Get all users from database
-      const { data: users, error } = await supabase
+
+      // Get all users from database via supabaseAdmin (bypassing RLS for admin API)
+      const { data: users, error } = await supabaseAdmin
         .from('users')
-        .select('id, username, email, role, created_at, updated_at')
+        .select('id, username, email, full_name, role, auth_id, created_at, updated_at')
         .order('created_at', { ascending: false })
 
       if (error) {
         throw error
       }
-      
+
       // Filter by role if specified
       let filteredUsers = users || []
       if (role && role !== 'all') {
         filteredUsers = (users || []).filter((user) => user.role === role)
       }
 
-      // Add summary statistics
+      // Summary statistics
       const roleSummary = (users || []).reduce((acc: Record<string, number>, user) => {
         acc[user.role] = (acc[user.role] || 0) + 1
         return acc

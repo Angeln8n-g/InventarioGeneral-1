@@ -6,6 +6,7 @@ export interface User {
   password_hash: string
   full_name: string
   role: 'user' | 'admin'
+  auth_id?: string | null
   created_at: string
   updated_at: string
   version: number
@@ -148,6 +149,7 @@ export interface CreateUserInput {
   password_hash: string
   full_name: string
   role?: 'user' | 'admin'
+  auth_id?: string | null
 }
 
 export interface UpdateUserInput {
@@ -155,6 +157,7 @@ export interface UpdateUserInput {
   email?: string
   full_name?: string
   role?: 'user' | 'admin'
+  auth_id?: string | null
 }
 
 export interface CreateItemTypeInput {

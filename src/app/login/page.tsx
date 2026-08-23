@@ -47,10 +47,9 @@ export default function LoginPage() {
     try {
       const result = await login(data).unwrap()
       console.log('Login successful:', result)
-      // Redirect will be handled by useEffect when user state changes
+      const targetPath = result.user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'
+      router.push(targetPath)
     } catch (err) {
-      // RTK Query errors are already handled by the error state from the mutation
-      // Log the error for debugging purposes
       if (err && typeof err === 'object') {
         if ('data' in err) {
           console.error('Login failed:', err.data)
