@@ -60,12 +60,12 @@ NavItemButton.displayName = 'NavItemButton';
 const SidebarComponent: React.FC<SidebarProps> = ({ collapsed = false, onToggle, items, activeId, onNavigate }) => {
   const { isMobile, isTablet, isDesktop } = useResponsive();
 
-  // Don't render on mobile (use BottomNavigation instead)
-  if (isMobile) return null;
-
   const handleItemClick = useCallback((item: NavItem) => {
     onNavigate?.(item);
   }, [onNavigate]);
+
+  // Don't render on mobile (use BottomNavigation instead)
+  if (isMobile) return null;
 
   const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
 

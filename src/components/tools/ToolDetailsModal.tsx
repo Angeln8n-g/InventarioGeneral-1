@@ -2,23 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { TransitionDialog } from '@/components/ui/TransitionDialog'
 import QRCode from 'qrcode'
 import { Button } from '@/components/ui/Button'
-
-interface ToolInstance {
-  id: number
-  item_type: {
-    id: number
-    name: string
-    description?: string
-    category?: string
-    default_loan_duration_days?: number
-  }
-  qr_code: string
-  serial_number?: string
-  status: 'available' | 'loaned' | 'out-of-service' | 'lost' | 'damaged'
-  condition_notes?: string
-  created_at: string
-  updated_at: string
-}
+import type { ToolInstanceWithItemType } from '@/types/database'
 
 interface ToolDetailsModalProps {
   isOpen: boolean
@@ -37,7 +21,7 @@ export const ToolDetailsModal: React.FC<ToolDetailsModalProps> = ({
   onNavigate,
   onToolUpdated,
 }) => {
-  const [tool, setTool] = useState<ToolInstance | null>(null)
+  const [tool, setTool] = useState<ToolInstanceWithItemType | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [showStatusModal, setShowStatusModal] = useState(false)

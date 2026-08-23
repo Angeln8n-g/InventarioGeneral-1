@@ -110,7 +110,7 @@ function getDateRange(
 ): { start: string; end: string } {
   const now = new Date()
   let start: Date
-  let end: Date = now
+  const end: Date = now
 
   if (timeRange === 'custom' && startDate && endDate) {
     return { start: startDate, end: endDate }

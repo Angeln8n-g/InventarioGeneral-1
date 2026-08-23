@@ -4,7 +4,7 @@ import { supabaseAdmin } from './supabase-admin'
 import { userOperations } from './supabase-client'
 import { hasPermission, requirePermission, type Permission } from './permissions'
 
-const JWT_SECRET = process.env.JWT_SECRET as string || 'default_jwt_secret_key'
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'development' ? 'dev_jwt_secret_key' : '')
 
 export interface AuthenticatedUser {
   id: number
@@ -35,12 +35,22 @@ export class AuthorizationError extends Error {
 
 export async function authenticateRequest(request: NextRequest): Promise<AuthContext> {
   const authHeader = request.headers.get('authorization')
+  let token: string | null = null
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new AuthenticationError('No token provided')
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7)
+  } else {
+    // Check cookies as fallback
+    token =
+      request.cookies.get('sb-access-token')?.value ||
+      request.cookies.get('auth-token')?.value ||
+      request.cookies.get('token')?.value ||
+      null
   }
 
-  const token = authHeader.substring(7)
+  if (!token) {
+    throw new AuthenticationError('No token provided')
+  }
 
   try {
     // 1. Attempt to verify token via Supabase Auth

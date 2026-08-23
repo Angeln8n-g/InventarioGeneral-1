@@ -4,8 +4,8 @@ import React, { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
-import { yupResolver } from '@hookform/resolvers/yup'
-import * as yup from 'yup'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { RootState } from '@/app/store'
 import { useLoginMutation } from '@/services/api'
 import { Button } from '@/components/ui/Button'
@@ -13,12 +13,12 @@ import { Input } from '@/components/ui/Input'
 import { OptimizedBackgroundImage } from '@/components/ui/OptimizedBackgroundImage'
 import { BACKGROUND_IMAGES } from '@/types/images'
 
-const schema = yup.object({
-  username: yup.string().required('Username is required'),
-  password: yup.string().required('Password is required'),
+const schema = z.object({
+  username: z.string().min(1, 'Username is required'),
+  password: z.string().min(1, 'Password is required'),
 })
 
-type FormData = yup.InferType<typeof schema>
+type FormData = z.infer<typeof schema>
 
 export default function LoginPage() {
   const { user, token } = useSelector((state: RootState) => state.auth)
@@ -30,7 +30,7 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: yupResolver(schema),
+    resolver: zodResolver(schema),
   })
 
   useEffect(() => {

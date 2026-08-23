@@ -397,7 +397,7 @@ export const reservationReportOperations = {
    */
   async getQRScanStatistics(filters: ReservationReportFilters): Promise<QRScanAttemptData[]> {
     // Query the qr_scan_statistics view
-    let query = supabase.from('qr_scan_statistics').select('*')
+    const query = supabase.from('qr_scan_statistics').select('*')
 
     // Apply date filter if provided
     if (filters.dateRange?.start || filters.dateRange?.end) {

@@ -801,7 +801,7 @@ function generateGeneralReportPDF(
   doc.text('Métricas Globales', 14, 45)
   
   doc.setFontSize(10)
-  let y = 52
+  const y = 52
   doc.text(`Total de Evaluaciones: ${globalMetrics.total_evaluations}`, 14, y)
   doc.text(`Promedio General: ${globalMetrics.overall_average_score.toFixed(1)}%`, 14, y + 6)
   doc.text(`Espacios Evaluados: ${globalMetrics.total_spaces_evaluated}`, 14, y + 12)

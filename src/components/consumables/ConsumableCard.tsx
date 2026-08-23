@@ -251,3 +251,5 @@ export const ConsumableCard = React.memo<ConsumableCardProps>(({
     prevProps.activeReservations?.length === nextProps.activeReservations?.length
   )
 })
+
+ConsumableCard.displayName = 'ConsumableCard'

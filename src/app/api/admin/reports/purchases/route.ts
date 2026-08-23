@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
             }
 
             // Filter and transform purchases
-            let purchases = (auditLogs || [])
+            const purchases = (auditLogs || [])
                 .filter((log: any) => {
                     const restockAmount = log.new_values?.restock_amount || log.new_values?.adjustment
                     if (!restockAmount || parseFloat(restockAmount) <= 0) return false

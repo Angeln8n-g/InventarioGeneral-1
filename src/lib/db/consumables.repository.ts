@@ -288,6 +288,14 @@ export const reservationOperations = {
         .lte('expiration_date', tomorrow.toISOString())
     }
 
+    if (filters?.limit) {
+      if (filters.offset !== undefined) {
+        query = query.range(filters.offset, filters.offset + filters.limit - 1)
+      } else {
+        query = query.limit(filters.limit)
+      }
+    }
+
     const { data, error } = await query
 
     if (error) throw error

@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
       // Try to get unit_cost if column exists
       let hasUnitCost = false
-      let itemTypesWithCost: Record<number, number> = {}
+      const itemTypesWithCost: Record<number, number> = {}
       
       try {
         const { data: itemTypesData } = await supabase
@@ -116,7 +116,7 @@ function getDateRange(
 ): { start: string; end: string } {
   const now = new Date()
   let start: Date
-  let end: Date = now
+  const end: Date = now
 
   if (timeRange === 'custom' && startDate && endDate) {
     return { start: startDate, end: endDate }

@@ -174,7 +174,7 @@ function getDateRange(
 ): { start: string; end: string } {
   const now = new Date()
   let start: Date
-  let end: Date = new Date()
+  const end: Date = new Date()
 
   if (dateRangeType === 'custom' && startDate && endDate) {
     return { start: startDate, end: endDate }

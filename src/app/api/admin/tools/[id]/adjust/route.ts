@@ -4,21 +4,15 @@ import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
 import { validateToolStatus } from '@/utils/validation'
 import { ERROR_CODES, ERROR_MESSAGES, TOOL_STATUSES } from '@/utils/constants'
-import * as yup from 'yup'
+import { z } from 'zod'
 
-const adjustStatusSchema = yup.object({
-  status: yup
+const adjustStatusSchema = z.object({
+  status: z.enum(['available', 'loaned', 'out-of-service', 'lost', 'damaged']),
+  justification: z
     .string()
-    .oneOf(Object.values(TOOL_STATUSES), 'Invalid status')
-    .required('Status is required'),
-  justification: yup
-    .string()
-    .required('Justification is required')
     .min(10, 'Justification must be at least 10 characters')
     .max(1000, 'Justification must be less than 1000 characters'),
-  close_active_loan: yup
-    .boolean()
-    .default(false),
+  close_active_loan: z.boolean().default(false),
 })
 
 export async function POST(
@@ -46,7 +40,20 @@ export async function POST(
       const body = await request.json()
       
       // Validate input
-      const validatedData = adjustStatusSchema.validateSync(body)
+      const parseResult = adjustStatusSchema.safeParse(body)
+      if (!parseResult.success) {
+        return NextResponse.json(
+          {
+            error: {
+              code: ERROR_CODES.VALIDATION_ERROR,
+              message: parseResult.error.issues[0]?.message || 'Validation error',
+              timestamp: new Date().toISOString(),
+            },
+          },
+          { status: 400 }
+        )
+      }
+      const validatedData = parseResult.data
 
       // Get current tool
       const currentTool = await toolInstanceOperations.getById(toolId)

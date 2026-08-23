@@ -8,7 +8,7 @@
  */
 
 import React from 'react'
-import { renderHook } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { usePermissions, usePermissionCheck, usePermissionChecks } from '../usePermissions'
@@ -254,11 +254,10 @@ describe('usePermissions hook', () => {
         wrapper: createDynamicWrapper(adminUser, 'test-token'),
       })
 
-      // Wait for permissions to load
-      await new Promise(resolve => setTimeout(resolve, 100))
-
-      // Should indicate dynamic mode is being used
-      expect(result.current.isDynamic).toBe(true)
+      // Wait for permissions to load and dynamic mode to be active
+      await waitFor(() => {
+        expect(result.current.isDynamic).toBe(true)
+      })
     })
 
     it('should expose new properties for dynamic permissions', async () => {
@@ -283,13 +282,12 @@ describe('usePermissions hook', () => {
       })
 
       // Wait for permissions to load
-      await new Promise(resolve => setTimeout(resolve, 100))
-
-      // Should expose role permissions and overrides
-      expect(result.current.rolePermissions).toBeDefined()
-      expect(result.current.userOverrides).toBeDefined()
-      expect(result.current.refreshPermissions).toBeDefined()
-      expect(result.current.userRole).toBeDefined()
+      await waitFor(() => {
+        expect(result.current.rolePermissions).toBeDefined()
+        expect(result.current.userOverrides).toBeDefined()
+        expect(result.current.refreshPermissions).toBeDefined()
+        expect(result.current.userRole).toBeDefined()
+      })
     })
   })
 

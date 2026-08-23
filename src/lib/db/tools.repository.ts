@@ -170,6 +170,13 @@ export const toolInstanceOperations = {
     if (filters?.item_type_id) {
       query = query.eq('item_type_id', filters.item_type_id)
     }
+    if (filters?.limit) {
+      if (filters.offset !== undefined) {
+        query = query.range(filters.offset, filters.offset + filters.limit - 1)
+      } else {
+        query = query.limit(filters.limit)
+      }
+    }
 
     const { data, error } = await query
     if (error) throw error

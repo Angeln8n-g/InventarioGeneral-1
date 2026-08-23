@@ -37,6 +37,8 @@ export interface ToolInstance {
   current_loan?: Loan
 }
 
+export type ToolInstanceWithItemType = ToolInstance & { item_type: ItemType }
+
 export interface ConsumableStock {
   id: number
   item_type_id: number
@@ -300,7 +302,12 @@ export interface ApiError {
 }
 
 // Query filter types
-export interface LoanFilters {
+export interface PaginationParams {
+  limit?: number
+  offset?: number
+}
+
+export interface LoanFilters extends PaginationParams {
   user_id?: number
   tool_instance_id?: number
   status?: Loan['status']
@@ -309,13 +316,13 @@ export interface LoanFilters {
   end_date?: string
 }
 
-export interface ToolFilters {
+export interface ToolFilters extends PaginationParams {
   status?: ToolInstance['status']
   category?: string
   item_type_id?: number
 }
 
-export interface AuditLogFilters {
+export interface AuditLogFilters extends PaginationParams {
   user_id?: number
   entity_type?: string
   entity_id?: number
@@ -375,7 +382,7 @@ export interface UpdateReservationInput {
   required_qr_code_id?: number  // NEW: For updating the required QR code
 }
 
-export interface ReservationFilters {
+export interface ReservationFilters extends PaginationParams {
   user_id?: number
   item_type_id?: number
   status?: ConsumableReservation['status']

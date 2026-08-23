@@ -9,28 +9,14 @@ import { Button } from '@/components/ui/Button'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { ToolDetailsModal, ToolCard } from '@/components/tools'
 import { BulkImportTools } from '@/components/admin/BulkImportTools'
-
-interface ToolInstance {
-  id: number
-  item_type: {
-    id: number
-    name: string
-    description?: string
-    category?: string
-  }
-  qr_code: string
-  serial_number?: string
-  status: 'available' | 'loaned' | 'out-of-service' | 'lost' | 'damaged'
-  condition_notes?: string
-  created_at: string
-}
+import type { ToolInstanceWithItemType } from '@/types/database'
 
 function ManageToolsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useLanguage()
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useRequireAdmin()
-  const [tools, setTools] = useState<ToolInstance[]>([])
+  const [tools, setTools] = useState<ToolInstanceWithItemType[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterCategory, setFilterCategory] = useState<string>('all')

@@ -151,14 +151,16 @@ export const LazyWrapper = ({ children, fallback }: LazyWrapperProps) => {
 // ============================================================================
 
 export function withLazyLoading<P extends object>(
-    Component: ComponentType<P>,
-    fallback?: ReactNode
+  Component: ComponentType<P>,
+  fallback?: ReactNode
 ) {
-    return (props: P) => {
-        return (
-            <Suspense fallback={fallback || <LoadingSpinner />}>
+  const LazyWrapper = (props: P) => {
+    return (
+      <Suspense fallback={fallback || <LoadingSpinner />}>
         <Component {...props} />
-        </Suspense>
+      </Suspense>
     )
-}
+  }
+  LazyWrapper.displayName = `WithLazyLoading(${Component.displayName || Component.name || 'Component'})`
+  return LazyWrapper
 }

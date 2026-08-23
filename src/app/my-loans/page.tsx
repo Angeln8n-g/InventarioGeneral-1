@@ -135,6 +135,8 @@ const LoanItem = React.memo<LoanItemProps>(({ loan }) => {
   )
 })
 
+LoanItem.displayName = 'LoanItem'
+
 export default function MyLoansPage() {
   const router = useRouter()
   const { t } = useLanguage()

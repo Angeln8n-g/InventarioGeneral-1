@@ -3,6 +3,10 @@ import { withPermission } from '@/lib/auth-middleware'
 import { PERMISSIONS } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+  }
+
   try {
     return await withPermission(request, PERMISSIONS.ADMIN_MANAGE_TOOLS, async (authContext) => {
       return NextResponse.json({

@@ -214,7 +214,7 @@ describe('Alert Generation Properties', () => {
     it('should generate an alert for every overdue unreturned loan', () => {
       fc.assert(
         fc.property(
-          fc.array(loanArb, { minLength: 0, maxLength: 50 }),
+          fc.uniqueArray(loanArb, { selector: l => l.id, minLength: 0, maxLength: 50 }),
           currentDateArb,
           (loans, currentDate) => {
             const alerts = generateOverdueLoanAlerts(loans, currentDate)
@@ -236,7 +236,7 @@ describe('Alert Generation Properties', () => {
     it('should not generate alerts for returned loans', () => {
       fc.assert(
         fc.property(
-          fc.array(loanArb, { minLength: 0, maxLength: 50 }),
+          fc.uniqueArray(loanArb, { selector: l => l.id, minLength: 0, maxLength: 50 }),
           currentDateArb,
           (loans, currentDate) => {
             const alerts = generateOverdueLoanAlerts(loans, currentDate)
@@ -255,7 +255,7 @@ describe('Alert Generation Properties', () => {
     it('should not generate alerts for loans not yet due', () => {
       fc.assert(
         fc.property(
-          fc.array(loanArb, { minLength: 0, maxLength: 50 }),
+          fc.uniqueArray(loanArb, { selector: l => l.id, minLength: 0, maxLength: 50 }),
           currentDateArb,
           (loans, currentDate) => {
             const alerts = generateOverdueLoanAlerts(loans, currentDate)
@@ -277,7 +277,7 @@ describe('Alert Generation Properties', () => {
     it('should mark all overdue loan alerts as error severity', () => {
       fc.assert(
         fc.property(
-          fc.array(loanArb, { minLength: 0, maxLength: 50 }),
+          fc.uniqueArray(loanArb, { selector: l => l.id, minLength: 0, maxLength: 50 }),
           currentDateArb,
           (loans, currentDate) => {
             const alerts = generateOverdueLoanAlerts(loans, currentDate)

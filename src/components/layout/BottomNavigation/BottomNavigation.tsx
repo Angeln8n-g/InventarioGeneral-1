@@ -68,13 +68,13 @@ NavItemButton.displayName = 'NavItemButton';
 const BottomNavigationComponent: React.FC<BottomNavigationProps> = ({ items, activeId, onNavigate }) => {
   const { isMobile } = useResponsive();
 
-  if (!isMobile) return null;
-
-  const displayItems = items.slice(0, MAX_ITEMS);
-
   const handleItemClick = useCallback((item: NavItem) => {
     onNavigate?.(item);
   }, [onNavigate]);
+
+  if (!isMobile) return null;
+
+  const displayItems = items.slice(0, MAX_ITEMS);
 
   return (
     <nav

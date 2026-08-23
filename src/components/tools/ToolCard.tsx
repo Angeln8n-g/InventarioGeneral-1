@@ -1,22 +1,8 @@
 import React from 'react'
-
-interface ToolInstance {
-  id: number
-  item_type: {
-    id: number
-    name: string
-    description?: string
-    category?: string
-  }
-  qr_code: string
-  serial_number?: string
-  status: 'available' | 'loaned' | 'out-of-service' | 'lost' | 'damaged'
-  condition_notes?: string
-  created_at: string
-}
+import type { ToolInstanceWithItemType } from '@/types/database'
 
 interface ToolCardProps {
-  tool: ToolInstance
+  tool: ToolInstanceWithItemType
   onViewDetails: () => void
 }
 
