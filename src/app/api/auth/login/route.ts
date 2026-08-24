@@ -8,7 +8,7 @@ import { loginSchema } from '@/utils/validation'
 import bcrypt from 'bcryptjs'
 import { loginRateLimiter } from '@/middleware/rate-limit'
 
-const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'development' ? 'dev_jwt_secret_key' : '')
+const JWT_SECRET = process.env.JWT_SECRET || 'inventario_sgi_jwt_secret_key_default'
 
 export async function POST(request: NextRequest) {
   // Apply rate limiting
@@ -78,12 +78,6 @@ export async function POST(request: NextRequest) {
         token = authData.session.access_token
         sessionData = authData.session
         authUserId = authData.user?.id || user.auth_id || undefined
-      } else if (user.auth_id) {
-        const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
-          type: 'magiclink',
-          email: userEmail,
-        })
-        token = linkData?.properties?.hashed_token || undefined
       }
     } catch (authErr) {
       console.warn('⚠️ Supabase Auth online login skipped or unavailable:', authErr instanceof Error ? authErr.message : authErr)

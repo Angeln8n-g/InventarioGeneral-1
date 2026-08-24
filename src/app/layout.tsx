@@ -67,9 +67,7 @@ export default function RootLayout({
 
         <meta name="viewport" content="minimum-scale=1, initial-scale=1, width=device-width, shrink-to-fit=no, user-scalable=no, viewport-fit=cover" />
         
-        {/* Preload critical resources */}
-        <link rel="preload" as="image" href="/images/materiales-reservas-background.jpg" />
-        <link rel="preload" as="image" href="/images/solicitar-materiales-background.jpg" />
+        {/* Fonts preconnect */}
         <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.googleapis.com" crossOrigin="anonymous" />
       </head>

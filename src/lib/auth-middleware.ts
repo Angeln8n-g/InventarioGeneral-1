@@ -4,7 +4,7 @@ import { supabaseAdmin } from './supabase-admin'
 import { userOperations } from './supabase-client'
 import { hasPermission, requirePermission, type Permission } from './permissions'
 
-const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'development' ? 'dev_jwt_secret_key' : '')
+const JWT_SECRET = process.env.JWT_SECRET || 'inventario_sgi_jwt_secret_key_default'
 
 export interface AuthenticatedUser {
   id: number

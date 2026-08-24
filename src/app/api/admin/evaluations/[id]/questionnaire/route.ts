@@ -107,7 +107,8 @@ export async function GET(
         if (authHeader) {
           const token = authHeader.substring(7)
           const jwt = await import('jsonwebtoken')
-          const decoded = jwt.default.verify(token, process.env.JWT_SECRET as string) as { userId: number }
+          const JWT_SECRET = process.env.JWT_SECRET || 'inventario_sgi_jwt_secret_key_default'
+          const decoded = jwt.default.verify(token, JWT_SECRET) as { userId: number }
           
           if (decoded.userId !== evaluation.assigned_to) {
             // Get assigned user info for the error message
