@@ -40,22 +40,19 @@ export async function GET(request: NextRequest) {
         supabase.from('tool_instances').select('id', { count: 'exact', head: true }).in('status', ['maintenance', 'out-of-service', 'damaged']),
       ])
 
-      const firstError =
-        toolsError ||
-        availableError ||
-        loanedError ||
-        activeLoansError ||
-        overdueError ||
-        usersError ||
-        consumableTypesError ||
-        totalConsumablesError ||
-        lowStockError ||
-        electronicsError ||
-        toolsByCategoryError ||
-        consumablesByCategoryError ||
-        maintenanceError
-
-      if (firstError) throw firstError
+      if (toolsError) console.warn('Dashboard stats tools error:', toolsError.message)
+      if (availableError) console.warn('Dashboard stats available error:', availableError.message)
+      if (loanedError) console.warn('Dashboard stats loaned error:', loanedError.message)
+      if (activeLoansError) console.warn('Dashboard stats active loans error:', activeLoansError.message)
+      if (overdueError) console.warn('Dashboard stats overdue error:', overdueError.message)
+      if (usersError) console.warn('Dashboard stats users error:', usersError.message)
+      if (consumableTypesError) console.warn('Dashboard stats consumable types error:', consumableTypesError.message)
+      if (totalConsumablesError) console.warn('Dashboard stats total consumables error:', totalConsumablesError.message)
+      if (lowStockError) console.warn('Dashboard stats low stock error:', lowStockError.message)
+      if (electronicsError) console.warn('Dashboard stats electronics error:', electronicsError.message)
+      if (toolsByCategoryError) console.warn('Dashboard stats tools by category error:', toolsByCategoryError.message)
+      if (consumablesByCategoryError) console.warn('Dashboard stats consumables by category error:', consumablesByCategoryError.message)
+      if (maintenanceError) console.warn('Dashboard stats maintenance error:', maintenanceError.message)
 
       const lowStockItems = lowStockData?.filter(
         item => item.current_quantity <= item.minimum_threshold
@@ -175,7 +172,8 @@ export async function GET(request: NextRequest) {
       {
         error: {
           code: ERROR_CODES.DATABASE_ERROR,
-          message: ERROR_MESSAGES.GENERIC_ERROR,
+          message: errorMessage || ERROR_MESSAGES.GENERIC_ERROR,
+          details: errorDetails,
           timestamp: new Date().toISOString(),
         },
       },
