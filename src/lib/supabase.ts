@@ -4,8 +4,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
 // Validate Supabase configuration
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Supabase configuration missing. Some features may not work.')
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('placeholder')) {
+  console.error('❌ CRITICAL: Supabase configuration missing or using placeholders. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Environment Variables.')
 }
 
 // Create Supabase client with proper configuration

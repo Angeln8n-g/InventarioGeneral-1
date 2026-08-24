@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
         error: {
           code: ERROR_CODES.DATABASE_ERROR,
           message: ERROR_MESSAGES.GENERIC_ERROR,
+          details: error instanceof Error ? error.message : String(error),
           timestamp: new Date().toISOString(),
         },
       },
