@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import jwt from 'jsonwebtoken'
 import { userOperations, auditLogOperations } from '@/lib/supabase-client'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { supabase } from '@/lib/supabase'
@@ -6,6 +7,8 @@ import { ensureSupabaseAuthUser } from '@/lib/auth-supabase-sync'
 import { loginSchema } from '@/utils/validation'
 import bcrypt from 'bcryptjs'
 import { loginRateLimiter } from '@/middleware/rate-limit'
+
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'development' ? 'dev_jwt_secret_key' : '')
 
 export async function POST(request: NextRequest) {
   // Apply rate limiting
@@ -59,25 +62,47 @@ export async function POST(request: NextRequest) {
       console.error('⚠️ Auth sync warning:', syncError)
     }
 
-    // 4. Authenticate via Supabase Auth
-    const userEmail = user.email || `${user.username}@example.com`
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: userEmail,
-      password: password
-    })
+    // 4. Authenticate via Supabase Auth (with local JWT fallback)
+    let token: string | undefined = undefined
+    let authUserId: string | undefined = user.auth_id || undefined
+    let sessionData: any = undefined
 
-    let token = authData?.session?.access_token
+    try {
+      const userEmail = user.email || `${user.username}@example.com`
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: password
+      })
 
-    // Fallback: If signInWithPassword fails due to email confirmation or auth config, issue session via admin
-    if (authError || !token) {
-      console.warn('Supabase Auth signInWithPassword notice:', authError?.message)
-      if (user.auth_id) {
+      if (!authError && authData?.session?.access_token) {
+        token = authData.session.access_token
+        sessionData = authData.session
+        authUserId = authData.user?.id || user.auth_id || undefined
+      } else if (user.auth_id) {
         const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
           type: 'magiclink',
           email: userEmail,
         })
-        token = linkData?.properties?.hashed_token || token
+        token = linkData?.properties?.hashed_token || undefined
       }
+    } catch (authErr) {
+      console.warn('⚠️ Supabase Auth online login skipped or unavailable:', authErr instanceof Error ? authErr.message : authErr)
+    }
+
+    // Fallback: If no Supabase token was obtained, generate local JWT token
+    if (!token && JWT_SECRET) {
+      token = jwt.sign(
+        { userId: user.id, username: user.username, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      )
+    }
+
+    if (!token) {
+      return NextResponse.json(
+        { error: { code: 'AUTHENTICATION_ERROR', message: 'Unable to issue authentication session' } },
+        { status: 500 }
+      )
     }
 
     // 5. Create audit log
@@ -87,7 +112,7 @@ export async function POST(request: NextRequest) {
         action: 'login',
         entity_type: 'user',
         entity_id: user.id,
-        new_values: { login_time: new Date().toISOString(), auth_provider: 'supabase_auth' },
+        new_values: { login_time: new Date().toISOString(), auth_provider: sessionData ? 'supabase_auth' : 'local_jwt' },
         ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
         user_agent: request.headers.get('user-agent') || 'unknown',
       })
@@ -98,15 +123,31 @@ export async function POST(request: NextRequest) {
     // Prepare clean user payload
     const { password_hash: _password_hash, ...userWithoutPassword } = user
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       user: {
         ...userWithoutPassword,
-        auth_id: user.auth_id || authData?.user?.id
+        auth_id: authUserId
       },
-      token: authData?.session?.access_token || token,
-      session: authData?.session,
-      message: 'Login successful via Supabase Auth'
+      token,
+      session: sessionData,
+      message: sessionData ? 'Login successful via Supabase Auth' : 'Login successful via Local Auth'
     })
+
+    // Synchronize cookies for SSR and Next.js Edge Middleware
+    response.cookies.set('auth-token', token, {
+      httpOnly: false,
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+      sameSite: 'lax',
+    })
+    response.cookies.set('sb-access-token', token, {
+      httpOnly: false,
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+      sameSite: 'lax',
+    })
+
+    return response
 
   } catch (error: unknown) {
     console.error('❌ Login error:', error)

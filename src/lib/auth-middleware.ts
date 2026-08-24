@@ -52,8 +52,33 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
     throw new AuthenticationError('No token provided')
   }
 
+  // 1. Attempt fast local JWT verification first (0ms latency, works offline)
+  if (JWT_SECRET) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId?: number; id?: number }
+      const userId = decoded.userId || decoded.id
+      if (userId) {
+        const user = await userOperations.getById(userId)
+        if (user) {
+          return {
+            user: {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              role: (user.role as 'user' | 'admin') || 'user',
+              auth_id: user.auth_id || undefined,
+            },
+            token,
+          }
+        }
+      }
+    } catch (_jwtError) {
+      // Token is not a local JWT or expired locally; attempt Supabase Auth next
+    }
+  }
+
+  // 2. Attempt verification via Supabase Auth (with safe error handling)
   try {
-    // 1. Attempt to verify token via Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token)
 
     if (!authError && authData?.user) {
@@ -99,40 +124,11 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
         }
       }
     }
-
-    // 2. Fallback to legacy JWT verification during migration phase
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
-    const user = await userOperations.getById(decoded.userId)
-
-    if (!user) {
-      throw new AuthenticationError('User not found')
-    }
-
-    return {
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: (user.role as 'user' | 'admin') || 'user',
-        auth_id: user.auth_id || undefined,
-      },
-      token,
-    }
-
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      throw error
-    }
-    if (error instanceof Error) {
-      if (error.name === 'JsonWebTokenError') {
-        throw new AuthenticationError('Invalid token')
-      }
-      if (error.name === 'TokenExpiredError') {
-        throw new AuthenticationError('Token expired')
-      }
-    }
-    throw new AuthenticationError('Authentication failed')
+  } catch (supabaseError: unknown) {
+    console.warn('Supabase Auth verification skipped/failed:', supabaseError instanceof Error ? supabaseError.message : supabaseError)
   }
+
+  throw new AuthenticationError('Invalid or expired token')
 }
 
 export function requireAdmin(authContext: AuthContext): void {

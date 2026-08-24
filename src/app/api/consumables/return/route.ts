@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth-middleware'
 import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { auditLogOperations, notificationOperations } from '@/lib/supabase-client'
 import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants'
 import { isCableUnit } from '@/utils/cableDetection'
 import { calculateLength } from '@/utils/markerValidation'
 import { validateSegmentReturn } from '@/utils/segmentOverlap'
+
+const dbClient = supabaseAdmin || supabase
 
 interface ReturnItem {
   item_type_id: number
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get consumption history for this item on this date
-        const { data: movements, error: movementsError } = await supabase
+        const { data: movements, error: movementsError } = await dbClient
           .from('stock_movements')
           .select(`
             consumable_stock_id,
@@ -121,7 +124,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Check for overlapping segments in existing returns
-          const { data: existingReturns, error: returnsError } = await supabase
+          const { data: existingReturns, error: returnsError } = await dbClient
             .from('consumable_returns')
             .select('segment_start, segment_end, return_date')
             .eq('user_id', authContext.user.id)
@@ -160,7 +163,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get already returned quantity
-        const { data: existingReturns, error: returnsError } = await supabase
+        const { data: existingReturns, error: returnsError } = await dbClient
           .from('consumable_returns')
           .select('returned_quantity')
           .eq('user_id', authContext.user.id)
@@ -192,7 +195,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get stock information
-        const { data: stock, error: stockError } = await supabase
+        const { data: stock, error: stockError } = await dbClient
           .from('consumable_stock')
           .select('id, current_quantity, item_type_id')
           .eq('item_type_id', returnItem.item_type_id)
@@ -263,7 +266,7 @@ export async function POST(request: NextRequest) {
           }
 
           let returnRecord: any = null
-          const { data, error: insertError } = await supabase
+          const { data, error: insertError } = await dbClient
             .from('consumable_returns')
             .insert(insertData)
             .select()
@@ -280,7 +283,7 @@ export async function POST(request: NextRequest) {
               notes: returnData.notes ? `${returnData.notes} (segment: ${returnData.segment_start}-${returnData.segment_end})` : `Segment: ${returnData.segment_start}-${returnData.segment_end}`,
               status: returnData.status,
             }
-            const { data: fallbackData, error: fallbackError } = await supabase
+            const { data: fallbackData, error: fallbackError } = await dbClient
               .from('consumable_returns')
               .insert(basicInsertData)
               .select()
@@ -299,7 +302,7 @@ export async function POST(request: NextRequest) {
 
         // Update stock quantities
         for (const stockUpdate of stockUpdates) {
-          const { error: updateError } = await supabase
+          const { error: updateError } = await dbClient
             .from('consumable_stock')
             .update({ current_quantity: stockUpdate.new_quantity })
             .eq('id', stockUpdate.stock_id)
@@ -309,7 +312,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Create stock movement record
-          const { error: movementError } = await supabase
+          const { error: movementError } = await dbClient
             .from('stock_movements')
             .insert({
               consumable_stock_id: stockUpdate.stock_id,
@@ -413,7 +416,7 @@ export async function GET(request: NextRequest) {
     return await withAuth(request, async (authContext) => {
       const { searchParams } = new URL(request.url)
       
-      let query = supabase
+      let query = dbClient
         .from('consumable_returns')
         .select(`
           *,

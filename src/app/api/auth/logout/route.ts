@@ -32,9 +32,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       message: 'Logout successful'
     })
+
+    // Clear session cookies
+    response.cookies.set('auth-token', '', { path: '/', maxAge: 0 })
+    response.cookies.set('sb-access-token', '', { path: '/', maxAge: 0 })
+    response.cookies.set('token', '', { path: '/', maxAge: 0 })
+
+    return response
 
   } catch (error: unknown) {
     console.error('Logout error:', error)

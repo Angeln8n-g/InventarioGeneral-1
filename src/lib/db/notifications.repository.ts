@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { supabaseAdmin } from '../supabase-admin'
 import type {
   Notification,
   CreateNotificationInput,
@@ -7,6 +8,8 @@ import type {
   NotificationPreferences,
   NotificationFilter,
 } from '@/types/notifications'
+
+const dbClient = supabaseAdmin || supabase
 
 // Notification operations
 export const notificationOperations = {
@@ -17,7 +20,7 @@ export const notificationOperations = {
     limit: number = 50
   ): Promise<{ data: Notification[]; total: number; unread_count: number }> {
     try {
-      let query = supabase
+      let query = dbClient
         .from('notifications')
         .select('*', { count: 'exact' })
         .eq('user_id', userId)
@@ -50,7 +53,7 @@ export const notificationOperations = {
         }
       }
 
-      const { count: unreadCount, error: unreadError } = await supabase
+      const { count: unreadCount, error: unreadError } = await dbClient
         .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
@@ -76,7 +79,7 @@ export const notificationOperations = {
   },
 
   async getUnreadByUserId(userId: number): Promise<Notification[]> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('notifications')
       .select('*')
       .eq('user_id', userId)
@@ -88,7 +91,7 @@ export const notificationOperations = {
   },
 
   async create(input: CreateNotificationInput): Promise<Notification> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('notifications')
       .insert(input)
       .select()
@@ -99,7 +102,7 @@ export const notificationOperations = {
   },
 
   async markAsRead(id: number): Promise<Notification> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('notifications')
       .update({
         is_read: true,
@@ -114,7 +117,7 @@ export const notificationOperations = {
   },
 
   async markAllAsRead(userId: number): Promise<void> {
-    const { error } = await supabase
+    const { error } = await dbClient
       .from('notifications')
       .update({
         is_read: true,
@@ -127,7 +130,7 @@ export const notificationOperations = {
   },
 
   async delete(id: number): Promise<void> {
-    const { error } = await supabase
+    const { error } = await dbClient
       .from('notifications')
       .delete()
       .eq('id', id)
@@ -139,7 +142,7 @@ export const notificationOperations = {
 // Notification preferences operations
 export const notificationPreferencesOperations = {
   async getByUserId(userId: number): Promise<NotificationPreferences | null> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('notification_preferences')
       .select('*')
       .eq('user_id', userId)
@@ -150,7 +153,7 @@ export const notificationPreferencesOperations = {
   },
 
   async create(userId: number): Promise<NotificationPreferences> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('notification_preferences')
       .insert({ user_id: userId })
       .select()
@@ -161,7 +164,7 @@ export const notificationPreferencesOperations = {
   },
 
   async update(userId: number, preferences: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
       .from('notification_preferences')
       .update({ ...preferences, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
